@@ -1,28 +1,48 @@
 # MVP
 
-## Why this exists
+## Letter
 
-- State the smallest useful version of the project.
-- Keep the scope explicit.
+Each letter stores:
 
-## In scope
+- [ ] Auto-generated ID
+- [ ] Recipient
+- [ ] Country
+- [ ] Date sent
+- [ ] Status
+- [ ] Date received (optional)
+- [ ] Notes (optional)
 
-- List the minimum user-facing behavior.
-- Keep the list short.
+### Statuses
 
-## Out of scope
+- [ ] In transit
+- [ ] Received
+- [ ] Unknown
 
-- List what this version does not do.
-- Remove this section if everything fits in scope.
+## Telegram bot
 
-## Scenario
+### Commands
 
-```bash
-command one
-command two
-```
+- [ ] `/help` — show available commands
+- [ ] `/send` — register a new outgoing letter
+- [ ] `/receive` — mark a letter as received
+- [ ] `/sent` — list outgoing letters
+- [ ] `/received` — list received letters
 
-## Rule
+### Buttons
 
-- Write the test for whether something belongs in this version.
+Main menu:
 
+- [ ] 📮 Send letter
+- [ ] 📬 Letter received
+- [ ] 📤 Sent letters
+- [ ] 📥 Received letters
+- [ ] ❓ Help
+
+## Automatic
+
+- [ ] Generate sequential letter IDs
+- [ ] Calculate transit time after a delivery date is added
+
+## Storage
+
+SQLite database via SQLAlchemy and Alembic.
