@@ -1,32 +1,24 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from aiogram.types import Message
 from aiogram.types import User as TelegramUser
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from postbox.handlers.menu import begin_receive, show_journal
+from postbox.handlers.menu import show_journal
 from postbox.handlers.start import show_start
 from postbox.models import User
-from postbox.texts import JOURNAL_PLACEHOLDER, RECEIVE_PLACEHOLDER, WELCOME
+from postbox.texts import JOURNAL_PLACEHOLDER, WELCOME
 
 
-@pytest.mark.parametrize(
-    ("handler", "expected_text"),
-    [
-        (begin_receive, RECEIVE_PLACEHOLDER),
-        (show_journal, JOURNAL_PLACEHOLDER),
-    ],
-)
-def test_menu_handler_replies_with_placeholder(handler: object, expected_text: str) -> None:
+def test_journal_replies_with_placeholder() -> None:
     message = MagicMock(spec=Message)
     message.answer = AsyncMock()
 
-    asyncio.run(handler(message))  # type: ignore[operator]
+    asyncio.run(show_journal(message))
 
     message.answer.assert_awaited_once()
-    assert message.answer.await_args.args[0] == expected_text
+    assert message.answer.await_args.args[0] == JOURNAL_PLACEHOLDER
 
 
 def test_start_replies_with_welcome() -> None:

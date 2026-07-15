@@ -4,19 +4,18 @@
 
 Each letter stores:
 
-- [ ] Auto-generated ID
-- [ ] Recipient
+- [x] Auto-generated ID
+- [x] Correspondent and direction
 - [ ] Country
-- [ ] Date sent
-- [ ] Status
-- [ ] Date received (optional)
-- [ ] Notes (optional)
+- [x] Date sent (optional for incoming mail)
+- [x] Derived status
+- [x] Date received (optional for outgoing mail)
+- [x] Notes (storage only)
 
 ### Statuses
 
-- [ ] In transit
-- [ ] Received
-- [ ] Unknown
+- [x] In transit
+- [x] Received
 
 ## Telegram bot
 
@@ -37,7 +36,7 @@ Main menu:
 - [x] 📬 Получить
 - [x] 📚 Посмотреть почту
 
-The Send flow is complete. Receive and Journal still lead to placeholders.
+The Send and Receive flows are complete. Journal still leads to a placeholder.
 
 ### Send flow
 
@@ -46,6 +45,15 @@ The Send flow is complete. Receive and Journal still lead to placeholders.
 - [x] Review and confirm the record
 - [x] Cancel from any button-driven step
 - [x] Save outgoing mail with the In transit status
+
+### Receive flow
+
+- [x] Choose an existing sender or add a new one
+- [x] Use today's received date or enter another date
+- [x] Keep the sent date unknown or enter a readable postmark date
+- [x] Reject a sent date later than the received date
+- [x] Review, confirm, or cancel the record
+- [x] Save incoming mail with the Received status
 
 ## Automatic
 

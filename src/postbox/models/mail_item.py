@@ -39,6 +39,10 @@ class MailItem(ActiveRecord):
             "received_at IS NULL OR received_at >= sent_at",
             name="ck_mail_items_received_after_sent",
         ),
+        CheckConstraint(
+            "(direction = 'outgoing' AND sent_at IS NOT NULL) OR (direction = 'incoming' AND received_at IS NOT NULL)",
+            name="ck_mail_items_direction_dates",
+        ),
         Index("ix_mail_items_owner_direction_sent", "owner_id", "direction", "sent_at"),
     )
 
@@ -56,7 +60,7 @@ class MailItem(ActiveRecord):
         ),
         nullable=False,
     )
-    sent_at: Mapped[date] = mapped_column(Date, nullable=False)
+    sent_at: Mapped[date | None] = mapped_column(Date)
     received_at: Mapped[date | None] = mapped_column(Date)
     note: Mapped[str | None] = mapped_column(Text)
 

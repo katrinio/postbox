@@ -10,6 +10,8 @@ does not keep durable state on its local filesystem.
 - `mail_items` stores incoming and outgoing paper mail.
 
 Mail status is derived from `received_at`; it is not stored separately.
+Outgoing mail always has a sent date. Incoming mail always has a received date,
+while its sent date may remain unknown when the postmark cannot be read.
 
 ## Isolation
 

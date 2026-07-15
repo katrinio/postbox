@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date
 from html import escape
 
 from aiogram import F, Router
@@ -8,6 +8,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from postbox.handlers.common import callback_message, format_date, normalize_name, parse_date, register_owner
 from postbox.keyboards.main_menu import MainMenuAction, main_menu_keyboard
 from postbox.keyboards.send import (
     CANCEL_SEND,
@@ -22,7 +23,7 @@ from postbox.keyboards.send import (
     date_keyboard,
     recipient_keyboard,
 )
-from postbox.models import Correspondent, MailDirection, MailItem, User
+from postbox.models import Correspondent, MailDirection, MailItem
 from postbox.texts import (
     SEND_CANCELLED,
     SEND_DATE,
@@ -48,17 +49,7 @@ class SendMail(StatesGroup):
 
 
 def parse_sent_date(value: str, *, today: date | None = None) -> date | None:
-    try:
-        parsed = datetime.strptime(value.strip(), "%d.%m.%Y").date()
-    except ValueError:
-        return None
-    if parsed > (today or date.today()):
-        return None
-    return parsed
-
-
-def format_date(value: date) -> str:
-    return value.strftime("%d.%m.%Y")
+    return parse_date(value, latest=today)
 
 
 def confirmation_text(recipient_name: str, sent_at: date) -> str:
@@ -67,26 +58,6 @@ def confirmation_text(recipient_name: str, sent_at: date) -> str:
         f"Кому: <b>{escape(recipient_name)}</b>\n"
         f"Отправлено: <b>{format_date(sent_at)}</b>\n"
         "Статус: <b>в пути</b>"
-    )
-
-
-def callback_message(callback: CallbackQuery) -> Message | None:
-    if isinstance(callback.message, Message):
-        return callback.message
-    return None
-
-
-async def register_owner(message: Message, session: AsyncSession) -> User | None:
-    telegram_user = message.from_user
-    if telegram_user is None:
-        return None
-    return await User.register(
-        session,
-        telegram_id=telegram_user.id,
-        username=telegram_user.username,
-        first_name=telegram_user.first_name,
-        last_name=telegram_user.last_name,
-        language_code=telegram_user.language_code,
     )
 
 
@@ -167,7 +138,7 @@ async def choose_recipient(callback: CallbackQuery, state: FSMContext, session: 
 
 @router.message(SendMail.entering_recipient, F.text)
 async def accept_new_recipient(message: Message, state: FSMContext) -> None:
-    name = " ".join((message.text or "").split())
+    name = normalize_name(message.text or "")
     if not 1 <= len(name) <= 160:
         await message.answer(SEND_RECIPIENT_INVALID)
         return
