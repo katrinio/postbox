@@ -48,7 +48,7 @@ async def test_user_registration_is_idempotent(session: AsyncSession) -> None:
         language_code="en",
     )
 
-    count = await session.scalar(select(func.count()).select_from(User))
+    count = await session.scalar(select(func.count()).select_from(User).where(User.telegram_id == 42))
 
     assert first.id == second.id
     assert second.username == "new-name"
@@ -86,6 +86,32 @@ async def test_active_record_persists_mail_and_derives_status(session: AsyncSess
     await mail.delete(session)
 
     assert await MailItem.get(session, mail.id) is None
+
+
+async def test_correspondents_are_reused_and_scoped_to_owner(session: AsyncSession) -> None:
+    user = await User.create(
+        session,
+        telegram_id=150,
+        username=None,
+        first_name="Katrin",
+        last_name=None,
+        language_code="ru",
+    )
+
+    first = await Correspondent.find_or_create(session, owner_id=user.id, name="Masha")
+    second = await Correspondent.find_or_create(session, owner_id=user.id, name="masha")
+    correspondents = await Correspondent.for_owner(session, user.id)
+
+    assert first.id == second.id
+    assert correspondents == [first]
+    assert (
+        await Correspondent.find_for_owner(
+            session,
+            owner_id=user.id,
+            correspondent_id=first.id,
+        )
+        is first
+    )
 
 
 async def test_mail_cannot_use_another_users_correspondent(session: AsyncSession) -> None:
