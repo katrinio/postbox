@@ -15,9 +15,11 @@ class Settings:
     """Runtime settings loaded from environment variables."""
 
     bot_token: str
+    database_url: str
     log_level: str = "INFO"
 
     TOKEN_VARIABLE: ClassVar[str] = "POSTBOX_BOT_TOKEN"
+    DATABASE_URL_VARIABLE: ClassVar[str] = "POSTBOX_DATABASE_URL"
     LOG_LEVEL_VARIABLE: ClassVar[str] = "POSTBOX_LOG_LEVEL"
 
     @classmethod
@@ -29,5 +31,10 @@ class Settings:
             message = f"{cls.TOKEN_VARIABLE} is required"
             raise ConfigurationError(message)
 
+        database_url = os.getenv(cls.DATABASE_URL_VARIABLE, "").strip()
+        if not database_url:
+            message = f"{cls.DATABASE_URL_VARIABLE} is required"
+            raise ConfigurationError(message)
+
         log_level = os.getenv(cls.LOG_LEVEL_VARIABLE, "INFO").strip().upper() or "INFO"
-        return cls(bot_token=token, log_level=log_level)
+        return cls(bot_token=token, database_url=database_url, log_level=log_level)

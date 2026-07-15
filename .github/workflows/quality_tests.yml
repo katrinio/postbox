@@ -32,8 +32,25 @@ jobs:
   tests-and-coverage:
     name: Tests and coverage
     runs-on: ubuntu-latest
-    # Disable this job until the coverage gate is needed again.
-    if: ${{ false }}
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: postbox_test
+          POSTGRES_USER: postbox
+          POSTGRES_PASSWORD: postbox
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postbox -d postbox_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      POSTBOX_DATABASE_URL: postgresql+psycopg://postbox:postbox@localhost:5432/postbox_test
+      POSTBOX_TEST_DATABASE_URL: postgresql+psycopg://postbox:postbox@localhost:5432/postbox_test
 
     steps:
       - uses: actions/checkout@v5
@@ -47,6 +64,11 @@ jobs:
 
       - name: Install dependencies
         run: poetry install --no-interaction
+
+      - name: Apply and verify migrations
+        run: |
+          poetry run alembic upgrade head
+          poetry run alembic check
 
       - name: Run tests and coverage
         run: |
