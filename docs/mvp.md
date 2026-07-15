@@ -22,6 +22,7 @@ Each letter stores:
 
 ### Commands
 
+- [x] `/start` — show the main menu
 - [ ] `/help` — show available commands
 - [ ] `/send` — register a new outgoing letter
 - [ ] `/receive` — mark a letter as received
@@ -32,11 +33,12 @@ Each letter stores:
 
 Main menu:
 
-- [ ] 📮 Send letter
-- [ ] 📬 Letter received
-- [ ] 📤 Sent letters
-- [ ] 📥 Received letters
-- [ ] ❓ Help
+- [x] 📮 Отправить
+- [x] 📬 Получить
+- [x] 📚 Посмотреть почту
+
+The buttons currently lead to placeholders. Letter flows and storage belong to
+the next steps.
 
 ## Automatic
 
