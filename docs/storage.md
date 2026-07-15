@@ -1,28 +1,28 @@
 # Storage
 
-## Why this exists
+Postbox stores each user's private mail journal in PostgreSQL. The bot process
+does not keep durable state on its local filesystem.
 
-- Explain how project data is stored.
-- State what the user owns and controls.
+## Records
 
-## Format
+- `users` identifies journal owners by their Telegram ID.
+- `correspondents` is a private address book scoped to one user.
+- `mail_items` stores incoming and outgoing paper mail.
 
-- List the storage formats in use.
-- Prefer plain text files where possible.
+Mail status is derived from `received_at`; it is not stored separately.
 
-## Location
+## Isolation
 
-- Say where the data lives.
-- Keep paths and folders explicit.
+Every correspondent and mail item belongs to a user. A composite foreign key
+prevents a mail item from referring to another user's correspondent.
 
-## Behavior
+## Connection
 
-- Describe when data is written.
-- Describe when data is read.
-- Note any automatic changes.
+`POSTBOX_DATABASE_URL` contains the PostgreSQL connection URL. Production should
+use a dedicated database and role with only the permissions Postbox needs.
 
-## Notes
+## Migrations and backups
 
-- Add backup, migration, or cleanup details here.
-- Remove this section if it is not needed.
-
+Alembic owns schema changes. Run `poetry run alembic upgrade head` during a
+release, before restarting the bot. PostgreSQL backups are managed outside the
+application and should be tested by restoring them into a separate database.

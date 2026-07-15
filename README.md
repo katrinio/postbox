@@ -30,8 +30,8 @@ Record when a letter was sent, when it arrived (if it did), and how long the jou
 
 - Telegram bot
 
-- SQLite storage
+- PostgreSQL storage
 
 ## Tech stack
 
-`Python` · `Telegram Bot API` · `SQLAlchemy` · `Alembic` · `SQLite`
+`Python` · `Telegram Bot API` · `SQLAlchemy` · `Alembic` · `PostgreSQL`

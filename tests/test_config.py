@@ -4,9 +4,12 @@ import pytest
 
 from postbox.config import ConfigurationError, Settings
 
+DATABASE_URL = "postgresql+psycopg://postbox:password@localhost:5432/postbox"
+
 
 def test_settings_reads_bot_token(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(Settings.TOKEN_VARIABLE, "secret-token")
+    monkeypatch.setenv(Settings.DATABASE_URL_VARIABLE, DATABASE_URL)
     monkeypatch.setenv(Settings.LOG_LEVEL_VARIABLE, "debug")
 
     settings = Settings.from_env()
@@ -17,8 +20,12 @@ def test_settings_reads_bot_token(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_settings_reads_dotenv_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.delenv(Settings.TOKEN_VARIABLE, raising=False)
+    monkeypatch.delenv(Settings.DATABASE_URL_VARIABLE, raising=False)
     env_file = tmp_path / ".env"
-    env_file.write_text("POSTBOX_BOT_TOKEN=token-from-file\n", encoding="utf-8")
+    env_file.write_text(
+        f"POSTBOX_BOT_TOKEN=token-from-file\nPOSTBOX_DATABASE_URL={DATABASE_URL}\n",
+        encoding="utf-8",
+    )
 
     settings = Settings.from_env(env_file)
 
@@ -27,8 +34,12 @@ def test_settings_reads_dotenv_file(monkeypatch: pytest.MonkeyPatch, tmp_path: P
 
 def test_environment_takes_priority_over_dotenv(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv(Settings.TOKEN_VARIABLE, "token-from-environment")
+    monkeypatch.setenv(Settings.DATABASE_URL_VARIABLE, DATABASE_URL)
     env_file = tmp_path / ".env"
-    env_file.write_text("POSTBOX_BOT_TOKEN=token-from-file\n", encoding="utf-8")
+    env_file.write_text(
+        f"POSTBOX_BOT_TOKEN=token-from-file\nPOSTBOX_DATABASE_URL={DATABASE_URL}\n",
+        encoding="utf-8",
+    )
 
     settings = Settings.from_env(env_file)
 
@@ -37,6 +48,15 @@ def test_environment_takes_priority_over_dotenv(monkeypatch: pytest.MonkeyPatch,
 
 def test_settings_requires_bot_token(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.delenv(Settings.TOKEN_VARIABLE, raising=False)
+    monkeypatch.setenv(Settings.DATABASE_URL_VARIABLE, DATABASE_URL)
 
     with pytest.raises(ConfigurationError, match=Settings.TOKEN_VARIABLE):
+        Settings.from_env(tmp_path / "missing.env")
+
+
+def test_settings_requires_database_url(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv(Settings.TOKEN_VARIABLE, "secret-token")
+    monkeypatch.delenv(Settings.DATABASE_URL_VARIABLE, raising=False)
+
+    with pytest.raises(ConfigurationError, match=Settings.DATABASE_URL_VARIABLE):
         Settings.from_env(tmp_path / "missing.env")

@@ -47,4 +47,4 @@ the next steps.
 
 ## Storage
 
-SQLite database via SQLAlchemy and Alembic.
+PostgreSQL database via SQLAlchemy and Alembic.
