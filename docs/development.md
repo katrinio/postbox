@@ -1,31 +1,36 @@
 # Development
 
-## Why this exists
-
-- Explain how to work on the project.
-- Keep the focus on the local workflow.
-
 ## Setup
 
-- List the required tools.
-- Add only the steps that are needed.
+- Python 3.14
+- Poetry 2
+
+```bash
+poetry install
+```
+
+Create a bot with [BotFather](https://t.me/BotFather), copy the example settings,
+and put the token in the local `.env` file:
+
+```bash
+cp .env.example .env
+```
+
+Postbox loads `.env` from the current working directory. Existing process
+environment variables take priority over values from the file.
+
+`POSTBOX_LOG_LEVEL` is optional and defaults to `INFO`.
 
 ## Run
 
 ```bash
-command to install
-command to start
-command to test
+poetry run postbox
 ```
 
 ## Checks
 
-- `command one`
-- `command two`
-- `command three`
-
-## Notes
-
-- Add project-specific constraints here.
-- Remove this section if there is nothing to note.
-
+```bash
+poetry run ruff check .
+poetry run mypy src
+poetry run pytest
+```

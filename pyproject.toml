@@ -1,15 +1,20 @@
 [tool.poetry]
-name = "python-project-template"
+name = "postbox"
 version = "0.1.0"
-description = "A starting point for small Python projects."
+description = "A tiny Telegram journal for paper letters and postcards."
 authors = ["Katrin Torsunova"]
 readme = "README.md"
 packages = [
-    { include = "src" },
+    { include = "postbox", from = "src" },
 ]
+
+[tool.poetry.scripts]
+postbox = "postbox.__main__:run"
 
 [tool.poetry.dependencies]
 python = ">=3.14,<3.15"
+aiogram = ">=3.29.1,<4.0.0"
+python-dotenv = ">=1.2.2,<2.0.0"
 
 [build-system]
 requires = ["poetry-core>=1.9.0"]
