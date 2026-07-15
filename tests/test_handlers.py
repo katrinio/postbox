@@ -6,16 +6,15 @@ from aiogram.types import Message
 from aiogram.types import User as TelegramUser
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from postbox.handlers.menu import begin_receive, begin_send, show_journal
+from postbox.handlers.menu import begin_receive, show_journal
 from postbox.handlers.start import show_start
 from postbox.models import User
-from postbox.texts import JOURNAL_PLACEHOLDER, RECEIVE_PLACEHOLDER, SEND_PLACEHOLDER, WELCOME
+from postbox.texts import JOURNAL_PLACEHOLDER, RECEIVE_PLACEHOLDER, WELCOME
 
 
 @pytest.mark.parametrize(
     ("handler", "expected_text"),
     [
-        (begin_send, SEND_PLACEHOLDER),
         (begin_receive, RECEIVE_PLACEHOLDER),
         (show_journal, JOURNAL_PLACEHOLDER),
     ],

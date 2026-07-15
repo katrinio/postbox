@@ -37,8 +37,15 @@ Main menu:
 - [x] 📬 Получить
 - [x] 📚 Посмотреть почту
 
-The buttons currently lead to placeholders. Letter flows and storage belong to
-the next steps.
+The Send flow is complete. Receive and Journal still lead to placeholders.
+
+### Send flow
+
+- [x] Choose an existing recipient or add a new one
+- [x] Use today's date or enter another date
+- [x] Review and confirm the record
+- [x] Cancel from any button-driven step
+- [x] Save outgoing mail with the In transit status
 
 ## Automatic
 
