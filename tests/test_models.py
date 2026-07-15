@@ -88,6 +88,64 @@ async def test_active_record_persists_mail_and_derives_status(session: AsyncSess
     assert await MailItem.get(session, mail.id) is None
 
 
+async def test_incoming_mail_allows_unknown_sent_date(session: AsyncSession) -> None:
+    user = await User.create(
+        session,
+        telegram_id=125,
+        username=None,
+        first_name="Katrin",
+        last_name=None,
+        language_code="ru",
+    )
+    correspondent = await Correspondent.create(session, owner_id=user.id, name="Unexpected sender")
+
+    mail = await MailItem.create(
+        session,
+        owner_id=user.id,
+        correspondent_id=correspondent.id,
+        direction=MailDirection.INCOMING,
+        sent_at=None,
+        received_at=date(2026, 7, 15),
+    )
+
+    assert mail.sent_at is None
+    assert mail.received_at == date(2026, 7, 15)
+    assert mail.status is MailStatus.RECEIVED
+
+
+async def test_direction_requires_its_known_date(session: AsyncSession) -> None:
+    user = await User.create(
+        session,
+        telegram_id=126,
+        username=None,
+        first_name="Katrin",
+        last_name=None,
+        language_code="ru",
+    )
+    correspondent = await Correspondent.create(session, owner_id=user.id, name="Dates")
+
+    with pytest.raises(IntegrityError):
+        async with session.begin_nested():
+            await MailItem.create(
+                session,
+                owner_id=user.id,
+                correspondent_id=correspondent.id,
+                direction=MailDirection.OUTGOING,
+                sent_at=None,
+            )
+
+    with pytest.raises(IntegrityError):
+        async with session.begin_nested():
+            await MailItem.create(
+                session,
+                owner_id=user.id,
+                correspondent_id=correspondent.id,
+                direction=MailDirection.INCOMING,
+                sent_at=None,
+                received_at=None,
+            )
+
+
 async def test_correspondents_are_reused_and_scoped_to_owner(session: AsyncSession) -> None:
     user = await User.create(
         session,
@@ -141,4 +199,5 @@ async def test_mail_cannot_use_another_users_correspondent(session: AsyncSession
                 correspondent_id=correspondent.id,
                 direction=MailDirection.INCOMING,
                 sent_at=date(2026, 7, 15),
+                received_at=date(2026, 7, 20),
             )
