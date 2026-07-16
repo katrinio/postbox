@@ -36,6 +36,8 @@ Record when a letter was sent, when it arrived (if it did), and how long the jou
 
 - [Roadmap](docs/roadmap.md)
 
+- [Visual direction](docs/design.md)
+
 ## Tech stack
 
 `Python` · `Telegram Bot API` · `SQLAlchemy` · `Alembic` · `PostgreSQL`
