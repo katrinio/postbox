@@ -36,7 +36,7 @@ Main menu:
 - [x] 📬 Получить
 - [x] 📚 Посмотреть почту
 
-The Send and Receive flows are complete. Journal still leads to a placeholder.
+The Send, Receive, and Journal flows are complete.
 
 ### Send flow
 
@@ -54,6 +54,15 @@ The Send and Receive flows are complete. Journal still leads to a placeholder.
 - [x] Reject a sent date later than the received date
 - [x] Review, confirm, or cancel the record
 - [x] Save incoming mail with the Received status
+
+### Journal
+
+- [x] Show In transit, Outgoing, Incoming, and All filters
+- [x] Order records by their mail event date
+- [x] Paginate long lists
+- [x] Open a detailed mail card
+- [x] Show current transit time for outgoing mail
+- [x] Keep every query scoped to the Telegram user
 
 ## Automatic
 

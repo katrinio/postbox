@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from postbox.models import Correspondent, MailDirection, MailItem, MailStatus, User
+from postbox.models import Correspondent, MailDirection, MailItem, MailJournalFilter, MailStatus, User
 
 DATABASE_URL = os.getenv("POSTBOX_TEST_DATABASE_URL", "")
 
@@ -201,3 +201,87 @@ async def test_mail_cannot_use_another_users_correspondent(session: AsyncSession
                 sent_at=date(2026, 7, 15),
                 received_at=date(2026, 7, 20),
             )
+
+
+async def test_journal_queries_are_ordered_filtered_and_private(session: AsyncSession) -> None:
+    owner = await User.create(
+        session,
+        telegram_id=-300,
+        username=None,
+        first_name="Journal owner",
+        last_name=None,
+        language_code="ru",
+    )
+    another_owner = await User.create(
+        session,
+        telegram_id=-301,
+        username=None,
+        first_name="Another owner",
+        last_name=None,
+        language_code="ru",
+    )
+    person = await Correspondent.create(session, owner_id=owner.id, name="Masha")
+    another_person = await Correspondent.create(session, owner_id=another_owner.id, name="Private")
+
+    delivered = await MailItem.create(
+        session,
+        owner_id=owner.id,
+        correspondent_id=person.id,
+        direction=MailDirection.OUTGOING,
+        sent_at=date(2026, 7, 1),
+        received_at=date(2026, 7, 5),
+    )
+    travelling = await MailItem.create(
+        session,
+        owner_id=owner.id,
+        correspondent_id=person.id,
+        direction=MailDirection.OUTGOING,
+        sent_at=date(2026, 7, 10),
+    )
+    incoming = await MailItem.create(
+        session,
+        owner_id=owner.id,
+        correspondent_id=person.id,
+        direction=MailDirection.INCOMING,
+        sent_at=None,
+        received_at=date(2026, 7, 15),
+    )
+    private = await MailItem.create(
+        session,
+        owner_id=another_owner.id,
+        correspondent_id=another_person.id,
+        direction=MailDirection.INCOMING,
+        sent_at=None,
+        received_at=date(2026, 7, 16),
+    )
+
+    stats = await MailItem.journal_stats(session, owner.id)
+    first_page = await MailItem.journal_page(
+        session,
+        owner.id,
+        view=MailJournalFilter.ALL,
+        page=1,
+        page_size=2,
+    )
+    second_page = await MailItem.journal_page(
+        session,
+        owner.id,
+        view=MailJournalFilter.ALL,
+        page=2,
+        page_size=2,
+    )
+    in_transit = await MailItem.journal_page(
+        session,
+        owner.id,
+        view=MailJournalFilter.IN_TRANSIT,
+    )
+
+    assert stats.total == 3
+    assert stats.outgoing == 2
+    assert stats.incoming == 1
+    assert stats.in_transit == 1
+    assert first_page.items == [incoming, travelling]
+    assert first_page.pages == 2
+    assert second_page.items == [delivered]
+    assert in_transit.items == [travelling]
+    assert await MailItem.find_for_owner(session, owner_id=owner.id, mail_id=private.id) is None
