@@ -32,6 +32,7 @@ def make_mail(
     direction: MailDirection,
     sent_at: date | None,
     received_at: date | None,
+    note: str | None = None,
 ) -> MailItem:
     correspondent = Correspondent(id=2, owner_id=1, name="Masha <3")
     return MailItem(
@@ -42,6 +43,7 @@ def make_mail(
         direction=direction,
         sent_at=sent_at,
         received_at=received_at,
+        note=note,
     )
 
 
@@ -82,6 +84,19 @@ def test_outgoing_detail_shows_current_transit_time() -> None:
     assert "В пути: <b>6 дн.</b>" in text
 
 
+def test_detail_shows_escaped_multiline_note() -> None:
+    mail = make_mail(
+        direction=MailDirection.INCOMING,
+        sent_at=None,
+        received_at=date(2026, 7, 15),
+        note="Из синей коробки\n<бережно>",
+    )
+
+    text = journal_detail_text(mail)
+
+    assert "Заметка:\nИз синей коробки\n&lt;бережно&gt;" in text
+
+
 def test_only_travelling_outgoing_mail_has_delivery_action() -> None:
     travelling = make_mail(
         direction=MailDirection.OUTGOING,
@@ -110,6 +125,36 @@ def test_only_travelling_outgoing_mail_has_delivery_action() -> None:
         for row in keyboard.inline_keyboard
         for button in row
     )
+
+
+def test_note_actions_follow_note_state() -> None:
+    empty = make_mail(
+        direction=MailDirection.INCOMING,
+        sent_at=None,
+        received_at=date(2026, 7, 15),
+    )
+    noted = make_mail(
+        direction=MailDirection.INCOMING,
+        sent_at=None,
+        received_at=date(2026, 7, 15),
+        note="В синей коробке",
+    )
+
+    empty_labels = [
+        button.text
+        for row in journal_detail_keyboard(empty, MailJournalFilter.ALL, 1).inline_keyboard
+        for button in row
+    ]
+    noted_labels = [
+        button.text
+        for row in journal_detail_keyboard(noted, MailJournalFilter.ALL, 1).inline_keyboard
+        for button in row
+    ]
+
+    assert "Добавить заметку" in empty_labels
+    assert "Убрать заметку" not in empty_labels
+    assert "Изменить заметку" in noted_labels
+    assert "Убрать заметку" in noted_labels
 
 
 def test_begin_journal_shows_private_stats() -> None:

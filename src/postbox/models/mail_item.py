@@ -42,6 +42,13 @@ class MailDeliveryError(ValueError):
     """Raised when a mail delivery transition is not valid."""
 
 
+class MailNoteError(ValueError):
+    """Raised when a mail note cannot be saved."""
+
+
+MAX_NOTE_LENGTH = 1000
+
+
 class MailJournalFilter(StrEnum):
     ALL = "all"
     IN_TRANSIT = "in_transit"
@@ -145,6 +152,19 @@ class MailItem(ActiveRecord):
         if received_at > date.today():
             raise MailDeliveryError("received date cannot be in the future")
         self.received_at = received_at
+        return await self.save(session)
+
+    @staticmethod
+    def normalize_note(note: str) -> str:
+        normalized = note.strip()
+        if not normalized:
+            raise MailNoteError("mail note cannot be empty")
+        if len(normalized) > MAX_NOTE_LENGTH:
+            raise MailNoteError("mail note is too long")
+        return normalized
+
+    async def set_note(self, session: AsyncSession, *, note: str | None) -> MailItem:
+        self.note = None if note is None else self.normalize_note(note)
         return await self.save(session)
 
     @classmethod

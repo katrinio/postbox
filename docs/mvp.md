@@ -10,7 +10,7 @@ Each letter stores:
 - [x] Date sent (optional for incoming mail)
 - [x] Derived status
 - [x] Date received (optional for outgoing mail)
-- [x] Notes (storage only)
+- [x] Optional notes
 
 ### Statuses
 
@@ -71,6 +71,13 @@ The Send, Receive, and Journal flows are complete.
 - [x] Reject a received date earlier than sending or later than today
 - [x] Review, change, confirm, or cancel the delivery
 - [x] Update the status and show the completed travel time
+
+### Notes
+
+- [x] Add a note from any mail card
+- [x] Show multiline notes safely in Telegram HTML
+- [x] Change or remove an existing note
+- [x] Confirm changes and protect every action by the Telegram owner
 
 ## Automatic
 
