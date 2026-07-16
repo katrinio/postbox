@@ -22,15 +22,19 @@ Keep track of outgoing and incoming paper mail.
 
 Record when a letter was sent, when it arrived (if it did), and how long the journey took.
 
-## Planned
+## Status
 
-- Send and receive journal
+- Telegram prototype with send, receive, delivery, journal, and notes
 
-- Transit time statistics
+- PostgreSQL storage and migrations
 
-- Telegram bot
+- Mobile-first PWA direction without app stores
 
-- PostgreSQL storage
+## Documentation
+
+- [MVP](docs/mvp.md)
+
+- [Roadmap](docs/roadmap.md)
 
 ## Tech stack
 
