@@ -64,10 +64,18 @@ The Send, Receive, and Journal flows are complete.
 - [x] Show current transit time for outgoing mail
 - [x] Keep every query scoped to the Telegram user
 
+### Delivery
+
+- [x] Show the delivery action only for outgoing mail that is still in transit
+- [x] Use today's received date or enter another date
+- [x] Reject a received date earlier than sending or later than today
+- [x] Review, change, confirm, or cancel the delivery
+- [x] Update the status and show the completed travel time
+
 ## Automatic
 
 - [ ] Generate sequential letter IDs
-- [ ] Calculate transit time after a delivery date is added
+- [x] Calculate transit time after a delivery date is added
 
 ## Storage
 

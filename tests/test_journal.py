@@ -14,7 +14,8 @@ from postbox.handlers.journal import (
     parse_item_callback,
     parse_list_callback,
 )
-from postbox.keyboards.journal import item_callback, list_callback
+from postbox.keyboards.delivery import MARK_RECEIVED_PREFIX
+from postbox.keyboards.journal import item_callback, journal_detail_keyboard, list_callback
 from postbox.models import (
     Correspondent,
     MailDirection,
@@ -79,6 +80,36 @@ def test_outgoing_detail_shows_current_transit_time() -> None:
 
     assert "Статус: <b>в пути</b>" in text
     assert "В пути: <b>6 дн.</b>" in text
+
+
+def test_only_travelling_outgoing_mail_has_delivery_action() -> None:
+    travelling = make_mail(
+        direction=MailDirection.OUTGOING,
+        sent_at=date(2026, 7, 10),
+        received_at=None,
+    )
+    delivered = make_mail(
+        direction=MailDirection.OUTGOING,
+        sent_at=date(2026, 7, 10),
+        received_at=date(2026, 7, 15),
+    )
+    incoming = make_mail(
+        direction=MailDirection.INCOMING,
+        sent_at=None,
+        received_at=date(2026, 7, 15),
+    )
+
+    travelling_keyboard = journal_detail_keyboard(travelling, MailJournalFilter.IN_TRANSIT, 2)
+    delivered_keyboard = journal_detail_keyboard(delivered, MailJournalFilter.OUTGOING, 1)
+    incoming_keyboard = journal_detail_keyboard(incoming, MailJournalFilter.INCOMING, 1)
+
+    assert travelling_keyboard.inline_keyboard[0][0].callback_data == f"{MARK_RECEIVED_PREFIX}3:in_transit:2"
+    assert all(
+        not (button.callback_data or "").startswith(MARK_RECEIVED_PREFIX)
+        for keyboard in (delivered_keyboard, incoming_keyboard)
+        for row in keyboard.inline_keyboard
+        for button in row
+    )
 
 
 def test_begin_journal_shows_private_stats() -> None:

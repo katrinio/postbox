@@ -38,6 +38,10 @@ class MailStatus(StrEnum):
     RECEIVED = "received"
 
 
+class MailDeliveryError(ValueError):
+    """Raised when a mail delivery transition is not valid."""
+
+
 class MailJournalFilter(StrEnum):
     ALL = "all"
     IN_TRANSIT = "in_transit"
@@ -130,6 +134,18 @@ class MailItem(ActiveRecord):
             return None
         end = self.received_at or today or date.today()
         return (end - self.sent_at).days
+
+    async def mark_received(self, session: AsyncSession, *, received_at: date) -> MailItem:
+        if self.direction is not MailDirection.OUTGOING:
+            raise MailDeliveryError("only outgoing mail can be marked as received")
+        if self.received_at is not None:
+            raise MailDeliveryError("mail is already received")
+        if self.sent_at is None or received_at < self.sent_at:
+            raise MailDeliveryError("received date cannot be earlier than sent date")
+        if received_at > date.today():
+            raise MailDeliveryError("received date cannot be in the future")
+        self.received_at = received_at
+        return await self.save(session)
 
     @classmethod
     async def journal_stats(cls, session: AsyncSession, owner_id: int) -> MailJournalStats:
