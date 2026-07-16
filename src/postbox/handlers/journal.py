@@ -7,7 +7,7 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from postbox.handlers.common import callback_message, format_date, register_owner
+from postbox.handlers.common import callback_message, format_date, owner_by_telegram_id, register_owner
 from postbox.keyboards.journal import (
     FILTERS_CALLBACK,
     ITEM_PREFIX,
@@ -18,7 +18,7 @@ from postbox.keyboards.journal import (
     journal_list_keyboard,
 )
 from postbox.keyboards.main_menu import MainMenuAction, main_menu_keyboard
-from postbox.models import MailDirection, MailItem, MailJournalFilter, MailJournalPage, User
+from postbox.models import MailDirection, MailItem, MailJournalFilter, MailJournalPage
 from postbox.texts import JOURNAL_EMPTY, JOURNAL_EXPIRED, JOURNAL_TITLE
 
 router = Router(name=__name__)
@@ -87,10 +87,6 @@ def parse_item_callback(data: str) -> tuple[int, MailJournalFilter, int] | None:
         return None
 
 
-async def callback_owner(callback: CallbackQuery, session: AsyncSession) -> User | None:
-    return await User.find_by_telegram_id(session, callback.from_user.id)
-
-
 async def answer_expired(callback: CallbackQuery) -> None:
     await callback.answer(JOURNAL_EXPIRED, show_alert=True)
 
@@ -108,7 +104,7 @@ async def begin_journal(message: Message, session: AsyncSession) -> None:
 @router.callback_query(F.data == FILTERS_CALLBACK)
 async def show_journal_filters(callback: CallbackQuery, session: AsyncSession) -> None:
     message = callback_message(callback)
-    owner = await callback_owner(callback, session)
+    owner = await owner_by_telegram_id(session, callback.from_user.id)
     if message is None or owner is None:
         await answer_expired(callback)
         return
@@ -121,7 +117,7 @@ async def show_journal_filters(callback: CallbackQuery, session: AsyncSession) -
 async def show_journal_list(callback: CallbackQuery, session: AsyncSession) -> None:
     message = callback_message(callback)
     parsed = parse_list_callback(callback.data or "")
-    owner = await callback_owner(callback, session)
+    owner = await owner_by_telegram_id(session, callback.from_user.id)
     if message is None or parsed is None or owner is None:
         await answer_expired(callback)
         return
@@ -141,7 +137,7 @@ async def show_journal_list(callback: CallbackQuery, session: AsyncSession) -> N
 async def show_mail_detail(callback: CallbackQuery, session: AsyncSession) -> None:
     message = callback_message(callback)
     parsed = parse_item_callback(callback.data or "")
-    owner = await callback_owner(callback, session)
+    owner = await owner_by_telegram_id(session, callback.from_user.id)
     if message is None or parsed is None or owner is None:
         await answer_expired(callback)
         return
@@ -159,7 +155,7 @@ async def show_mail_detail(callback: CallbackQuery, session: AsyncSession) -> No
     await callback.answer()
     await message.edit_text(
         journal_detail_text(mail),
-        reply_markup=journal_detail_keyboard(view, page),
+        reply_markup=journal_detail_keyboard(mail, view, page),
     )
 
 

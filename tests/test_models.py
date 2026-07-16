@@ -77,8 +77,7 @@ async def test_active_record_persists_mail_and_derives_status(session: AsyncSess
     assert mail.id is not None
     assert mail.status is MailStatus.IN_TRANSIT
 
-    mail.received_at = date(2026, 7, 20)
-    await mail.save(session)
+    await mail.mark_received(session, received_at=date(2026, 7, 16))
 
     assert mail.status is MailStatus.RECEIVED
     assert await MailItem.get(session, mail.id) is mail

@@ -3,6 +3,7 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from postbox.handlers.common import format_date
+from postbox.keyboards.delivery import mark_received_callback
 from postbox.models import MailDirection, MailItem, MailJournalFilter, MailJournalPage, MailJournalStats
 
 FILTERS_CALLBACK = "journal:filters"
@@ -80,10 +81,21 @@ def journal_list_keyboard(page: MailJournalPage) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def journal_detail_keyboard(view: MailJournalFilter, page: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
+def journal_detail_keyboard(mail: MailItem, view: MailJournalFilter, page: int) -> InlineKeyboardMarkup:
+    rows = []
+    if mail.direction is MailDirection.OUTGOING and mail.received_at is None:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="✓ Письмо дошло",
+                    callback_data=mark_received_callback(mail.id, view, page),
+                )
+            ]
+        )
+    rows.extend(
+        [
             [InlineKeyboardButton(text="← К списку", callback_data=list_callback(view, page))],
             [InlineKeyboardButton(text="К разделам", callback_data=FILTERS_CALLBACK)],
         ]
     )
+    return InlineKeyboardMarkup(inline_keyboard=rows)

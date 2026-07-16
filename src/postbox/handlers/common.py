@@ -42,3 +42,7 @@ async def register_owner(message: Message, session: AsyncSession) -> User | None
         last_name=telegram_user.last_name,
         language_code=telegram_user.language_code,
     )
+
+
+async def owner_by_telegram_id(session: AsyncSession, telegram_id: int) -> User | None:
+    return await User.find_by_telegram_id(session, telegram_id)
