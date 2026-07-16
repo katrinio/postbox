@@ -1,11 +1,25 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, CheckConstraint, Date, Enum, ForeignKey, ForeignKeyConstraint, Index, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    Date,
+    Enum,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    Text,
+    case,
+    func,
+    select,
+)
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
 
 from postbox.database.base import ActiveRecord
 
@@ -22,6 +36,30 @@ class MailDirection(StrEnum):
 class MailStatus(StrEnum):
     IN_TRANSIT = "in_transit"
     RECEIVED = "received"
+
+
+class MailJournalFilter(StrEnum):
+    ALL = "all"
+    IN_TRANSIT = "in_transit"
+    OUTGOING = "outgoing"
+    INCOMING = "incoming"
+
+
+@dataclass(frozen=True, slots=True)
+class MailJournalStats:
+    total: int
+    in_transit: int
+    outgoing: int
+    incoming: int
+
+
+@dataclass(frozen=True, slots=True)
+class MailJournalPage:
+    items: list[MailItem]
+    view: MailJournalFilter
+    page: int
+    pages: int
+    total: int
 
 
 class MailItem(ActiveRecord):
@@ -78,3 +116,88 @@ class MailItem(ActiveRecord):
         if self.received_at is None:
             return MailStatus.IN_TRANSIT
         return MailStatus.RECEIVED
+
+    @property
+    def journal_date(self) -> date:
+        value = self.sent_at if self.direction is MailDirection.OUTGOING else self.received_at
+        if value is None:
+            message = f"{self.direction.value} mail {self.id} has no journal date"
+            raise ValueError(message)
+        return value
+
+    def travel_days(self, *, today: date | None = None) -> int | None:
+        if self.sent_at is None:
+            return None
+        end = self.received_at or today or date.today()
+        return (end - self.sent_at).days
+
+    @classmethod
+    async def journal_stats(cls, session: AsyncSession, owner_id: int) -> MailJournalStats:
+        statement = select(
+            func.count(cls.id),
+            func.count(cls.id).filter(cls.direction == MailDirection.OUTGOING, cls.received_at.is_(None)),
+            func.count(cls.id).filter(cls.direction == MailDirection.OUTGOING),
+            func.count(cls.id).filter(cls.direction == MailDirection.INCOMING),
+        ).where(cls.owner_id == owner_id)
+        total, in_transit, outgoing, incoming = (await session.execute(statement)).one()
+        return MailJournalStats(
+            total=int(total),
+            in_transit=int(in_transit),
+            outgoing=int(outgoing),
+            incoming=int(incoming),
+        )
+
+    @classmethod
+    async def journal_page(
+        cls,
+        session: AsyncSession,
+        owner_id: int,
+        *,
+        view: MailJournalFilter,
+        page: int = 1,
+        page_size: int = 5,
+    ) -> MailJournalPage:
+        conditions = [cls.owner_id == owner_id]
+        if view is MailJournalFilter.IN_TRANSIT:
+            conditions.extend([cls.direction == MailDirection.OUTGOING, cls.received_at.is_(None)])
+        elif view is MailJournalFilter.OUTGOING:
+            conditions.append(cls.direction == MailDirection.OUTGOING)
+        elif view is MailJournalFilter.INCOMING:
+            conditions.append(cls.direction == MailDirection.INCOMING)
+
+        total = int(await session.scalar(select(func.count(cls.id)).where(*conditions)) or 0)
+        pages = max(1, (total + page_size - 1) // page_size)
+        current_page = min(max(1, page), pages)
+        journal_date = case(
+            (cls.direction == MailDirection.OUTGOING, cls.sent_at),
+            else_=cls.received_at,
+        )
+        statement = (
+            select(cls)
+            .options(selectinload(cls.correspondent))
+            .where(*conditions)
+            .order_by(journal_date.desc(), cls.id.desc())
+            .offset((current_page - 1) * page_size)
+            .limit(page_size)
+        )
+        items = list(await session.scalars(statement))
+        return MailJournalPage(
+            items=items,
+            view=view,
+            page=current_page,
+            pages=pages,
+            total=total,
+        )
+
+    @classmethod
+    async def find_for_owner(
+        cls,
+        session: AsyncSession,
+        *,
+        owner_id: int,
+        mail_id: int,
+    ) -> MailItem | None:
+        statement = (
+            select(cls).options(selectinload(cls.correspondent)).where(cls.id == mail_id, cls.owner_id == owner_id)
+        )
+        return await session.scalar(statement)

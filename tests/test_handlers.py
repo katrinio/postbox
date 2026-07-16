@@ -5,20 +5,9 @@ from aiogram.types import Message
 from aiogram.types import User as TelegramUser
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from postbox.handlers.menu import show_journal
 from postbox.handlers.start import show_start
 from postbox.models import User
-from postbox.texts import JOURNAL_PLACEHOLDER, WELCOME
-
-
-def test_journal_replies_with_placeholder() -> None:
-    message = MagicMock(spec=Message)
-    message.answer = AsyncMock()
-
-    asyncio.run(show_journal(message))
-
-    message.answer.assert_awaited_once()
-    assert message.answer.await_args.args[0] == JOURNAL_PLACEHOLDER
+from postbox.texts import WELCOME
 
 
 def test_start_replies_with_welcome() -> None:
