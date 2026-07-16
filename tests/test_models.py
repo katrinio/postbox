@@ -82,6 +82,14 @@ async def test_active_record_persists_mail_and_derives_status(session: AsyncSess
     assert mail.status is MailStatus.RECEIVED
     assert await MailItem.get(session, mail.id) is mail
 
+    await mail.set_note(session, note="  First postcard  ")
+
+    assert mail.note == "First postcard"
+
+    await mail.set_note(session, note=None)
+
+    assert mail.note is None
+
     await mail.delete(session)
 
     assert await MailItem.get(session, mail.id) is None

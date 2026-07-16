@@ -4,6 +4,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from postbox.handlers.common import format_date
 from postbox.keyboards.delivery import mark_received_callback
+from postbox.keyboards.notes import delete_note_callback, edit_note_callback
 from postbox.models import MailDirection, MailItem, MailJournalFilter, MailJournalPage, MailJournalStats
 
 FILTERS_CALLBACK = "journal:filters"
@@ -89,6 +90,24 @@ def journal_detail_keyboard(mail: MailItem, view: MailJournalFilter, page: int) 
                 InlineKeyboardButton(
                     text="✓ Письмо дошло",
                     callback_data=mark_received_callback(mail.id, view, page),
+                )
+            ]
+        )
+    note_label = "Изменить заметку" if mail.note else "Добавить заметку"
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text=note_label,
+                callback_data=edit_note_callback(mail.id, view, page),
+            )
+        ]
+    )
+    if mail.note:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="Убрать заметку",
+                    callback_data=delete_note_callback(mail.id, view, page),
                 )
             ]
         )

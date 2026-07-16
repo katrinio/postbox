@@ -64,6 +64,8 @@ def journal_detail_text(mail: MailItem, *, today: date | None = None) -> str:
     if travel_days is not None:
         label = "В пути" if mail.received_at is None else "Путешествие"
         lines.append(f"{label}: <b>{travel_days} дн.</b>")
+    if mail.note:
+        lines.extend(["", f"Заметка:\n{escape(mail.note)}"])
     return "\n".join(lines)
 
 
