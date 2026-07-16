@@ -44,3 +44,24 @@ poetry run pytest
 
 Database integration tests run when `POSTBOX_TEST_DATABASE_URL` is set. CI runs
 them against an isolated PostgreSQL service.
+
+## Web prototype
+
+The mobile interface prototype lives in `web/` and currently uses demonstration
+data. It requires Node.js 22.13 or newer.
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Open <http://localhost:3000>. The settings button switches the Home screen
+between normal, empty, and offline preview states.
+
+Frontend checks:
+
+```bash
+npm run lint
+npm test
+```

@@ -40,4 +40,4 @@ Record when a letter was sent, when it arrived (if it did), and how long the jou
 
 ## Tech stack
 
-`Python` · `Telegram Bot API` · `SQLAlchemy` · `Alembic` · `PostgreSQL`
+`Python` · `Telegram Bot API` · `SQLAlchemy` · `Alembic` · `PostgreSQL` · `React` · `TypeScript`
