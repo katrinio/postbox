@@ -1,6 +1,6 @@
 # postbox
 
-A tiny journal for paper letters and postcards.
+A multi-user web journal for paper letters and postcards with Telegram authentication.
 
 ---
 
@@ -22,13 +22,30 @@ Keep track of outgoing and incoming paper mail.
 
 Record when a letter was sent, when it arrived (if it did), and how long the journey took.
 
+## Quick Start
+
+```bash
+# Run everything with one command
+python start.py
+
+# Or use the bash version
+./start.sh
+```
+
+Then open:
+- 📖 **Web**: http://localhost:3000/login
+- 🔌 **API**: http://localhost:8000
+
+---
+
 ## Status
 
-- Telegram prototype with send, receive, delivery, journal, and notes
-
-- PostgreSQL storage and migrations
-
-- Mobile-first PWA direction without app stores
+- ✅ Multi-user web app with Telegram Login authentication
+- ✅ Auto-approval for first 5 users (configurable limit)
+- ✅ JWT-based sessions and data isolation per user
+- ✅ PostgreSQL storage with Alembic migrations
+- ✅ FastAPI backend with JSON REST API
+- 🚀 Mobile-first PWA (Next.js) without app stores
 
 ## Documentation
 
@@ -40,4 +57,6 @@ Record when a letter was sent, when it arrived (if it did), and how long the jou
 
 ## Tech stack
 
-`Python` · `Telegram Bot API` · `SQLAlchemy` · `Alembic` · `PostgreSQL` · `React` · `TypeScript`
+**Backend:** `Python` · `FastAPI` · `SQLAlchemy` · `Alembic` · `PostgreSQL` · `JWT` · `Telegram Login`
+
+**Frontend:** `React` · `Next.js` · `TypeScript`

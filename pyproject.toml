@@ -9,18 +9,19 @@ packages = [
 ]
 
 [tool.poetry.scripts]
-postbox = "postbox.__main__:run"
 postbox-api = "postbox.api:run"
 
 [tool.poetry.dependencies]
 python = ">=3.14,<3.15"
-aiogram = ">=3.29.1,<4.0.0"
 python-dotenv = ">=1.2.2,<2.0.0"
 sqlalchemy = {version = ">=2.0.51,<2.1.0", extras = ["asyncio"]}
 alembic = ">=1.18.5,<2.0.0"
 psycopg = {version = ">=3.3.4,<4.0.0", extras = ["binary"]}
+aiosqlite = ">=0.20.0,<1.0"
 fastapi = ">=0.116,<1.0"
 uvicorn = {version = ">=0.35,<1.0", extras = ["standard"]}
+pyjwt = ">=2.8.0,<3.0.0"
+httpx = ">=0.28,<1.0"
 
 [build-system]
 requires = ["poetry-core>=1.9.0"]
@@ -75,6 +76,7 @@ select = [
     "PT",
 ]
 ignore = [
+    "RUF001", # ру-текст
     "E731", # lambdas
     "PT018", # multiple in-place asserts
     "B023", # lambda definition closures
