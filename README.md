@@ -22,6 +22,22 @@ Keep track of outgoing and incoming paper mail.
 
 Record when a letter was sent, when it arrived (if it did), and how long the journey took.
 
+## Quick Start
+
+```bash
+# Run everything with one command
+python start.py
+
+# Or use the bash version
+./start.sh
+```
+
+Then open:
+- 📖 **Web**: http://localhost:3000/login
+- 🔌 **API**: http://localhost:8000
+
+---
+
 ## Status
 
 - ✅ Multi-user web app with Telegram Login authentication
