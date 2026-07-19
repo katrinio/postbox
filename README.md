@@ -1,52 +1,40 @@
 # postbox
 
-A multi-user web journal for paper letters and postcards with Telegram authentication.
+Postbox tracks paper letters and postcards from sending to delivery.
+
+It is a self-hosted, multi-user PWA for recording outgoing and incoming mail, delivery dates, and journey duration. Telegram Login provides authentication without a separate account system.
 
 ---
 
 <div align="center">
-  <img src="docs/images/postbox.png" width="500"/>
+  <img
+    src="docs/images/postbox-flow.svg"
+    width="720"
+    alt="A paper letter journey recorded in Postbox"
+  />
 </div>
 
 ---
 
-Some letters arrive.
+## Features
 
-Some disappear.
+- Record outgoing and incoming letters and postcards
+- Track sent and delivered dates
+- Calculate how long each journey took
+- Keep records for mail that never arrived
+- Isolate data between users
+- Install the mobile-first web app as a PWA
+- Sign in with Telegram
 
-All are remembered.
-
-## Goal
-
-Keep track of outgoing and incoming paper mail.
-
-Record when a letter was sent, when it arrived (if it did), and how long the journey took.
-
-## Quick Start
+## Run locally
 
 ```bash
-# Run everything with one command
 python start.py
-
-# Or use the bash version
-./start.sh
 ```
 
 Then open:
 - 📖 **Web**: http://localhost:3000/login
-- 🔌 **API**: http://localhost:8000
 
----
-
-## Status
-
-- ✅ Multi-user web app with Telegram Login authentication
-- ✅ Auto-approval for first 5 users (configurable limit)
-- ✅ JWT-based sessions and data isolation per user
-- ✅ **SQLite storage** for production; optional PostgreSQL for development
-- ✅ FastAPI backend with JSON REST API
-- ✅ Docker Compose deployment with health checks
-- 🚀 Mobile-first PWA (Next.js) without app stores
 
 ## Documentation
 
@@ -54,11 +42,3 @@ Then open:
 - [MVP](docs/mvp.md)
 - [Roadmap](docs/roadmap.md)
 - [Visual direction](docs/design.md)
-
-## Tech stack
-
-**Backend:** `Python` · `FastAPI` · `SQLAlchemy` · `SQLite` (prod) / `PostgreSQL` (dev) · `JWT` · `Telegram Login`
-
-**Frontend:** `React` · `Next.js` · `TypeScript`
-
-**Deployment:** `Docker` · `Docker Compose` · `nginx` (reverse proxy)
