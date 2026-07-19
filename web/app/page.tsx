@@ -86,7 +86,11 @@ const journalFilters: Array<{ id: JournalFilter; label: string }> = [
   { id: "received", label: "Получено" },
 ];
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_POSTBOX_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
+// Use relative /api path for same-origin requests in production
+// For local development without proxy, set NEXT_PUBLIC_POSTBOX_API_URL to http://localhost:8000
+const apiBaseUrl = process.env.NEXT_PUBLIC_POSTBOX_API_URL
+  ? process.env.NEXT_PUBLIC_POSTBOX_API_URL.replace(/\/$/, "")
+  : "";
 const journalDateFormatter = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
 
 function formatJournalDate(value: string) {
@@ -203,7 +207,8 @@ function JournalScreen() {
   const loadJournal = useCallback(async (signal?: AbortSignal) => {
     try {
       const token = localStorage.getItem("postbox-auth-token");
-      const response = await fetch(`${apiBaseUrl}/api/journal`, {
+      const url = apiBaseUrl ? `${apiBaseUrl}/api/journal` : `/api/journal`;
+      const response = await fetch(url, {
         signal,
         headers: {
           "Authorization": `Bearer ${token}`,

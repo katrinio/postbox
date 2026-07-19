@@ -3,9 +3,13 @@
 import { LogIn } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { getTelegramWebAppData, isWebApp } from "./lib/telegram-web-app";
+import { getTelegramWebAppData, isWebApp } from "../lib/telegram-web-app";
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_POSTBOX_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
+// Use relative /api path for same-origin requests in production
+// For local development without proxy, set NEXT_PUBLIC_POSTBOX_API_URL to http://localhost:8000
+const apiBaseUrl = process.env.NEXT_PUBLIC_POSTBOX_API_URL
+  ? process.env.NEXT_PUBLIC_POSTBOX_API_URL.replace(/\/$/, "")
+  : "";
 
 interface TelegramUser {
   id: number;
@@ -62,7 +66,8 @@ export default function LoginPage() {
     };
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/auth/telegram`, {
+      const url = apiBaseUrl ? `${apiBaseUrl}/api/auth/telegram` : `/api/auth/telegram`;
+      const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(authData),
@@ -108,7 +113,8 @@ export default function LoginPage() {
     };
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/auth/telegram`, {
+      const url = apiBaseUrl ? `${apiBaseUrl}/api/auth/telegram` : `/api/auth/telegram`;
+      const response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -129,7 +135,7 @@ export default function LoginPage() {
       }
     } catch (err) {
       console.error("Auth error:", err);
-      setError("Ошибка подключения. Проверьте что API запущен на http://localhost:8000");
+      setError("Ошибка подключения к API. Проверьте конфигурацию сервера.");
     } finally {
       setIsLoading(false);
     }
