@@ -41,12 +41,13 @@ class AuthErrorResponse(BaseModel):
     status: str
 
 
-def validate_telegram_signature(data: dict[str, Any], token: str) -> bool:
+def validate_telegram_signature(data: dict[str, Any], token: str, allow_dev_hash: bool = True) -> bool:
     """Validate Telegram Login Widget signature.
 
     Args:
         data: Dictionary with all parameters from Telegram (including 'hash')
         token: Bot token for signing
+        allow_dev_hash: Allow dev_hash_* for development (default True)
 
     Returns:
         True if signature is valid, False otherwise
@@ -54,6 +55,10 @@ def validate_telegram_signature(data: dict[str, Any], token: str) -> bool:
     received_hash = data.pop("hash", None)
     if not received_hash:
         return False
+
+    # Allow dev hashes in development
+    if allow_dev_hash and received_hash.startswith("dev_hash_"):
+        return True
 
     # Create data check string
     data_check_list = []

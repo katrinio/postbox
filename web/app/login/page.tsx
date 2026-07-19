@@ -2,10 +2,16 @@
 
 import { LogIn } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
-const BOT_USERNAME = "PostboxBot";
 const apiBaseUrl = process.env.NEXT_PUBLIC_POSTBOX_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
+
+// Mock Telegram user for development
+interface DevTelegramUser {
+  id: number;
+  first_name: string;
+  username?: string;
+}
 
 interface TelegramUser {
   id: number;
@@ -29,87 +35,59 @@ export default function LoginPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [statusCode, setStatusCode] = useState<number | null>(null);
-  const scriptLoaded = useRef(false);
+  const [telegramId, setTelegramId] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [username, setUsername] = useState("");
 
-  useEffect(() => {
-    if (scriptLoaded.current) return;
-    scriptLoaded.current = true;
-
-    // Load Telegram Login Widget script
-    const script = document.createElement("script");
-    script.src = "https://telegram.org/js/telegram-web-app.js";
-    script.async = true;
-    document.body.appendChild(script);
-  }, []);
-
-  const handleTelegramAuth = (user: TelegramUser) => {
+  const handleDevAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsLoading(true);
     setError(null);
 
+    if (!telegramId || !firstName) {
+      setError("Пожалуйста, заполните обязательные поля");
+      setIsLoading(false);
+      return;
+    }
+
     const authData = {
-      id: user.id,
-      first_name: user.first_name,
-      username: user.username || null,
-      last_name: user.last_name || null,
-      language_code: user.language_code || null,
-      photo_url: user.photo_url || null,
-      auth_date: user.auth_date,
-      hash: user.hash,
+      id: parseInt(telegramId, 10),
+      first_name: firstName,
+      username: username || null,
+      last_name: null,
+      language_code: "ru",
+      photo_url: null,
+      auth_date: Math.floor(Date.now() / 1000),
+      hash: "dev_hash_" + Date.now(), // Mock hash for development
     };
 
-    fetch(`${apiBaseUrl}/api/auth/telegram`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(authData),
-    })
-      .then(async (response) => {
-        const data = await response.json();
-        setStatusCode(response.status);
-
-        if (response.ok && data.token && data.is_approved) {
-          // Save token to localStorage
-          localStorage.setItem("postbox-auth-token", data.token);
-          localStorage.setItem("postbox-user-id", data.user_id);
-          // Redirect to main app
-          router.push("/");
-        } else if (response.status === 200 && !data.is_approved) {
-          setError(data.message || "Ожидается одобрение администратора");
-        } else {
-          setError(data.message || "Ошибка авторизации. Пожалуйста, попробуйте еще раз.");
-        }
-      })
-      .catch((err) => {
-        console.error("Auth error:", err);
-        setError("Ошибка подключения. Пожалуйста, проверьте соединение и попробуйте еще раз.");
-      })
-      .finally(() => {
-        setIsLoading(false);
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/auth/telegram`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(authData),
       });
-  };
 
-  useEffect(() => {
-    // Initialize Telegram Login Widget
-    setTimeout(() => {
-      if ((window as any).Telegram?.Login) {
-        (window as any).Telegram.Login.auth(
-          {
-            bot_id: 8801253207,
-            request_access: "write",
-          },
-          handleTelegramAuth
-        );
+      const data = await response.json();
+
+      if (response.ok && data.token && data.is_approved) {
+        localStorage.setItem("postbox-auth-token", data.token);
+        localStorage.setItem("postbox-user-id", data.user_id);
+        router.push("/");
+      } else if (response.status === 200 && !data.is_approved) {
+        setError(data.message || "Ожидается одобрение администратора");
       } else {
-        // Fallback: create a button that opens Telegram login
-        const button = document.getElementById("telegram-login-btn");
-        if (button) {
-          button.style.display = "block";
-        }
+        setError(data.message || "Ошибка авторизации");
       }
-    }, 100);
-  }, []);
+    } catch (err) {
+      console.error("Auth error:", err);
+      setError("Ошибка подключения. Проверьте что API запущен на http://localhost:8000");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -138,34 +116,105 @@ export default function LoginPage() {
           Личный журнал бумажных писем
         </p>
 
-        <div
-          id="telegram-login-btn"
-          style={{
-            display: "none",
-            marginBottom: "1rem",
-          }}
-        >
-          <a
-            href={`https://t.me/${BOT_USERNAME}?start=login`}
+        <form onSubmit={handleDevAuth} style={{ width: "100%" }}>
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={{ fontSize: "0.875rem", fontWeight: "500", display: "block", marginBottom: "0.5rem" }}>
+              Telegram ID *
+            </label>
+            <input
+              type="number"
+              value={telegramId}
+              onChange={(e) => setTelegramId(e.target.value)}
+              placeholder="123456789"
+              disabled={isLoading}
+              style={{
+                width: "100%",
+                padding: "0.75rem",
+                borderRadius: "0.5rem",
+                border: "1px solid var(--color-border)",
+                backgroundColor: "var(--color-bg-secondary)",
+                color: "var(--color-text)",
+                fontSize: "1rem",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={{ fontSize: "0.875rem", fontWeight: "500", display: "block", marginBottom: "0.5rem" }}>
+              Имя *
+            </label>
+            <input
+              type="text"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              placeholder="John"
+              disabled={isLoading}
+              style={{
+                width: "100%",
+                padding: "0.75rem",
+                borderRadius: "0.5rem",
+                border: "1px solid var(--color-border)",
+                backgroundColor: "var(--color-bg-secondary)",
+                color: "var(--color-text)",
+                fontSize: "1rem",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: "1.5rem" }}>
+            <label style={{ fontSize: "0.875rem", fontWeight: "500", display: "block", marginBottom: "0.5rem" }}>
+              Username (опционально)
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="john_doe"
+              disabled={isLoading}
+              style={{
+                width: "100%",
+                padding: "0.75rem",
+                borderRadius: "0.5rem",
+                border: "1px solid var(--color-border)",
+                backgroundColor: "var(--color-bg-secondary)",
+                color: "var(--color-text)",
+                fontSize: "1rem",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
             style={{
-              display: "inline-block",
-              padding: "0.75rem 1.5rem",
-              backgroundColor: "#0088cc",
+              width: "100%",
+              padding: "0.75rem",
+              backgroundColor: isLoading ? "var(--color-text-disabled)" : "#0088cc",
               color: "white",
+              border: "none",
               borderRadius: "0.5rem",
-              textDecoration: "none",
+              fontSize: "1rem",
               fontWeight: "500",
+              cursor: isLoading ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem",
             }}
           >
-            Войти через Telegram
-          </a>
-        </div>
+            <LogIn size={18} />
+            {isLoading ? "Вход..." : "Войти"}
+          </button>
+        </form>
 
         {error && (
           <div
             style={{
+              marginTop: "1rem",
               padding: "1rem",
-              marginBottom: "1rem",
               backgroundColor: "rgba(220, 38, 38, 0.1)",
               borderLeft: "4px solid rgb(220, 38, 38)",
               borderRadius: "0.25rem",
@@ -177,22 +226,16 @@ export default function LoginPage() {
           </div>
         )}
 
-        {isLoading && (
-          <div style={{ padding: "1rem", color: "var(--color-text-secondary)" }}>
-            Загрузка...
-          </div>
-        )}
-
         <p
           style={{
             marginTop: "2rem",
-            fontSize: "0.875rem",
+            fontSize: "0.75rem",
             color: "var(--color-text-secondary)",
           }}
         >
-          Первые 5 пользователей будут зарегистрированы автоматически.
+          💡 Для разработки: введите любой Telegram ID и имя.
           <br />
-          Остальные будут ждать одобрения администратора.
+          Первые 5 пользователей будут зарегистрированы автоматически.
         </p>
       </div>
     </div>
