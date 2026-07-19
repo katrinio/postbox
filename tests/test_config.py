@@ -62,25 +62,38 @@ def test_settings_requires_database_url(monkeypatch: pytest.MonkeyPatch, tmp_pat
         Settings.from_env(tmp_path / "missing.env")
 
 
-def test_web_settings_read_owner_without_bot_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv(Settings.TOKEN_VARIABLE, raising=False)
+def test_web_settings_requires_database_url(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.delenv(WebSettings.DATABASE_URL_VARIABLE, raising=False)
+    monkeypatch.setenv(WebSettings.JWT_SECRET_KEY_VARIABLE, "secret-key")
+
+    with pytest.raises(ConfigurationError, match=WebSettings.DATABASE_URL_VARIABLE):
+        WebSettings.from_env(tmp_path / "missing.env")
+
+
+def test_web_settings_requires_jwt_secret_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv(WebSettings.DATABASE_URL_VARIABLE, DATABASE_URL)
-    monkeypatch.setenv(WebSettings.OWNER_TELEGRAM_ID_VARIABLE, "123456789")
+    monkeypatch.delenv(WebSettings.JWT_SECRET_KEY_VARIABLE, raising=False)
+
+    with pytest.raises(ConfigurationError, match=WebSettings.JWT_SECRET_KEY_VARIABLE):
+        WebSettings.from_env(tmp_path / "missing.env")
+
+
+def test_web_settings_reads_registration_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(WebSettings.DATABASE_URL_VARIABLE, DATABASE_URL)
+    monkeypatch.setenv(WebSettings.JWT_SECRET_KEY_VARIABLE, "secret-key")
+    monkeypatch.setenv(WebSettings.REGISTRATION_LIMIT_VARIABLE, "10")
 
     settings = WebSettings.from_env()
 
     assert settings.database_url == DATABASE_URL
-    assert settings.owner_telegram_id == 123456789
+    assert settings.registration_limit == 10
 
 
-@pytest.mark.parametrize("owner_value", ["not-a-number", "0", "-42"])
-def test_web_settings_require_positive_owner_id(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    owner_value: str,
-) -> None:
+def test_web_settings_defaults_registration_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(WebSettings.DATABASE_URL_VARIABLE, DATABASE_URL)
-    monkeypatch.setenv(WebSettings.OWNER_TELEGRAM_ID_VARIABLE, owner_value)
+    monkeypatch.setenv(WebSettings.JWT_SECRET_KEY_VARIABLE, "secret-key")
+    monkeypatch.delenv(WebSettings.REGISTRATION_LIMIT_VARIABLE, raising=False)
 
-    with pytest.raises(ConfigurationError, match=WebSettings.OWNER_TELEGRAM_ID_VARIABLE):
-        WebSettings.from_env(tmp_path / "missing.env")
+    settings = WebSettings.from_env()
+
+    assert settings.registration_limit == 5
