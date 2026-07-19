@@ -102,15 +102,17 @@ COPY --from=python-builder /app/README.md .
 # Copy Node.js artifacts from builder
 # ============================================================================
 
-# Copy only the built frontend output (not full node_modules from builder)
-# vinext build output goes to .next and dist directories
-COPY --from=node-builder /app/web/package*.json ./web/
-COPY --from=node-builder /app/web/.next ./web/.next
+# Copy only the actual vinext runtime artifacts
+# vinext build produces:
+#   - dist/server/index.js (Node.js RSC server)
+#   - dist/client/assets/ (static assets)
+#   - dist/.openai/ (Wrangler configuration)
+# .next, public, and app/ are NOT used by vinext runtime
+COPY --from=node-builder /app/web/package.json /app/web/package-lock.json ./web/
 COPY --from=node-builder /app/web/dist ./web/dist
-COPY --from=node-builder /app/web/public ./web/public
 
-# Copy node_modules only runtime dependencies (use npm prune to reduce size)
-# Install only production dependencies in the runtime stage
+# Install only production dependencies required by vinext start
+# This includes the vinext CLI which npm start needs to execute
 WORKDIR /app/web
 RUN npm ci --omit=dev
 WORKDIR /app
