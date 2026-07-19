@@ -9,8 +9,7 @@ services:
 
     # Bind only to localhost interfaces; reverse proxy is outside this container
     ports:
-      - "127.0.0.1:3000:3000"   # Web frontend (reverse proxy only)
-      - "127.0.0.1:8000:8000"   # API backend (reverse proxy only)
+      - "127.0.0.1:8013:3000"   # Web frontend (reverse proxy only)
 
     environment:
       # Database: absolute path inside container
