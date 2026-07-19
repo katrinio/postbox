@@ -45,15 +45,11 @@ class WebSettings:
     """Settings for the local web API until account authentication is added."""
 
     database_url: str
-    owner_telegram_id: int
-    bot_token: str
     jwt_secret_key: str
     log_level: str = "INFO"
     registration_limit: int = 5
 
     DATABASE_URL_VARIABLE: ClassVar[str] = "POSTBOX_DATABASE_URL"
-    OWNER_TELEGRAM_ID_VARIABLE: ClassVar[str] = "POSTBOX_WEB_OWNER_TELEGRAM_ID"
-    BOT_TOKEN_VARIABLE: ClassVar[str] = "POSTBOX_BOT_TOKEN"
     JWT_SECRET_KEY_VARIABLE: ClassVar[str] = "POSTBOX_JWT_SECRET_KEY"
     LOG_LEVEL_VARIABLE: ClassVar[str] = "POSTBOX_LOG_LEVEL"
     REGISTRATION_LIMIT_VARIABLE: ClassVar[str] = "POSTBOX_REGISTRATION_LIMIT"
@@ -65,24 +61,6 @@ class WebSettings:
         database_url = os.getenv(cls.DATABASE_URL_VARIABLE, "").strip()
         if not database_url:
             message = f"{cls.DATABASE_URL_VARIABLE} is required"
-            raise ConfigurationError(message)
-
-        owner_value = os.getenv(cls.OWNER_TELEGRAM_ID_VARIABLE, "").strip()
-        if not owner_value:
-            message = f"{cls.OWNER_TELEGRAM_ID_VARIABLE} is required"
-            raise ConfigurationError(message)
-        try:
-            owner_telegram_id = int(owner_value)
-        except ValueError:
-            message = f"{cls.OWNER_TELEGRAM_ID_VARIABLE} must be an integer"
-            raise ConfigurationError(message) from None
-        if owner_telegram_id <= 0:
-            message = f"{cls.OWNER_TELEGRAM_ID_VARIABLE} must be positive"
-            raise ConfigurationError(message)
-
-        bot_token = os.getenv(cls.BOT_TOKEN_VARIABLE, "").strip()
-        if not bot_token:
-            message = f"{cls.BOT_TOKEN_VARIABLE} is required"
             raise ConfigurationError(message)
 
         jwt_secret = os.getenv(cls.JWT_SECRET_KEY_VARIABLE, "").strip()
@@ -99,8 +77,6 @@ class WebSettings:
 
         return cls(
             database_url=database_url,
-            owner_telegram_id=owner_telegram_id,
-            bot_token=bot_token,
             jwt_secret_key=jwt_secret,
             log_level=log_level,
             registration_limit=registration_limit,

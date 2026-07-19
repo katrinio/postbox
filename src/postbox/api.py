@@ -16,7 +16,6 @@ from postbox.config import WebSettings
 from postbox.database import Database
 from postbox.logging import configure_logging
 from postbox.models import MailDirection, MailItem, MailJournalFilter, MailStatus, User
-from postbox.telegram_notifier import send_telegram_message
 
 
 class JournalStatsResponse(BaseModel):
@@ -114,7 +113,6 @@ def create_app(settings: WebSettings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.database = database
-        app.state.owner_telegram_id = web_settings.owner_telegram_id
         app.state.web_settings = web_settings
         yield
         await database.dispose()
@@ -180,43 +178,11 @@ def create_app(settings: WebSettings | None = None) -> FastAPI:
                 is_approved=True,
             )
 
-        # Owner is always approved immediately
-        if login_data.id == web_settings.owner_telegram_id:
-            user.approved_at = datetime.now()
-            await user.save(session)
-            token = create_jwt_token(
-                user.id,
-                user.telegram_id,
-                web_settings.jwt_secret_key,
-            )
-            return AuthResponse(
-                token=token,
-                user_id=user.id,
-                telegram_id=user.telegram_id,
-                is_approved=True,
-            )
-
-        # Check registration limit for other users
+        # Check registration limit
         approved_count = await User.count_approved(session)
         if approved_count >= web_settings.registration_limit:
-            # Send notification to owner
-            message = (
-                f"🔔 *Попытка входа: превышен лимит регистраций*\n\n"
-                f"👤 {login_data.first_name}"
-            )
-            if login_data.username:
-                message += f" (@{login_data.username})"
-            message += f"\n🆔 Telegram ID: `{login_data.id}`\n\n"
-            message += f"📊 Зарегистрировано: {approved_count}/{web_settings.registration_limit}"
-
-            await send_telegram_message(
-                web_settings.bot_token,
-                web_settings.owner_telegram_id,
-                message,
-            )
-
             return AuthErrorResponse(
-                message="Регистрация временно закрыта. Администратор был уведомлен о вашем запросе.",
+                message="Регистрация временно закрыта. Достигнут лимит пользователей.",
                 status="awaiting_approval",
             )
 
