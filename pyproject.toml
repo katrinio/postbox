@@ -17,6 +17,7 @@ python-dotenv = ">=1.2.2,<2.0.0"
 sqlalchemy = {version = ">=2.0.51,<2.1.0", extras = ["asyncio"]}
 alembic = ">=1.18.5,<2.0.0"
 psycopg = {version = ">=3.3.4,<4.0.0", extras = ["binary"]}
+aiosqlite = ">=0.20.0,<1.0"
 fastapi = ">=0.116,<1.0"
 uvicorn = {version = ">=0.35,<1.0", extras = ["standard"]}
 pyjwt = ">=2.8.0,<3.0.0"
