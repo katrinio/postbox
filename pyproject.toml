@@ -9,12 +9,10 @@ packages = [
 ]
 
 [tool.poetry.scripts]
-postbox = "postbox.__main__:run"
 postbox-api = "postbox.api:run"
 
 [tool.poetry.dependencies]
 python = ">=3.14,<3.15"
-aiogram = ">=3.29.1,<4.0.0"
 python-dotenv = ">=1.2.2,<2.0.0"
 sqlalchemy = {version = ">=2.0.51,<2.1.0", extras = ["asyncio"]}
 alembic = ">=1.18.5,<2.0.0"
