@@ -8,7 +8,9 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
+# Note: Do NOT ignore web/build/ - it contains source files (sites-vite-plugin.ts)
+# Only ignore Python package build artifacts
+src/**/build/
 develop-eggs/
 dist/
 downloads/
