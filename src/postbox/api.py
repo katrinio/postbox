@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import date, datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
@@ -11,7 +11,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from postbox.auth import AuthErrorResponse, AuthResponse, TelegramAuthData, create_jwt_token, decode_jwt_token, validate_telegram_signature
+from postbox.auth import (
+    AuthErrorResponse,
+    AuthResponse,
+    create_jwt_token,
+    decode_jwt_token,
+    validate_telegram_signature,
+)
 from postbox.config import WebSettings
 from postbox.database import Database
 from postbox.logging import configure_logging
@@ -118,6 +124,7 @@ def create_app(settings: WebSettings | None = None) -> FastAPI:
         # Auto-create tables on startup if they don't exist
         try:
             from postbox.database.base import Base
+
             async with database.engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
         except Exception as e:

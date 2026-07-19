@@ -1,14 +1,12 @@
-# ruff: noqa: RUF001
-
 import asyncio
 from datetime import date
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from postbox.handlers.notes import note_confirmation_text, parse_note_callback
 from postbox.keyboards.notes import DELETE_NOTE_PREFIX, EDIT_NOTE_PREFIX, delete_note_callback, edit_note_callback
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from postbox.models import Correspondent, MailDirection, MailItem, MailJournalFilter, MailNoteError
 
 

@@ -3,11 +3,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiogram.types import Message
 from aiogram.types import User as TelegramUser
+from postbox.handlers.start import show_start
+from postbox.texts import WELCOME
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from postbox.handlers.start import show_start
 from postbox.models import User
-from postbox.texts import WELCOME
 
 
 def test_start_replies_with_welcome() -> None:

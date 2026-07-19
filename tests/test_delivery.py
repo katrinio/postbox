@@ -3,10 +3,10 @@ from datetime import date, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from postbox.handlers.delivery import delivery_confirmation_text, parse_delivery_date, parse_mark_callback
 from postbox.keyboards.delivery import mark_received_callback
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from postbox.models import (
     Correspondent,
     MailDeliveryError,

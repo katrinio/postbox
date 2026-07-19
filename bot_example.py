@@ -10,11 +10,12 @@ Then configure Web App URL in @BotFather:
     Bot Settings → Web App → http://localhost:3000 (for dev)
 """
 
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters.command import Command
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 import asyncio
 import os
+
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters.command import Command
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 
 async def main():
@@ -34,25 +35,18 @@ async def main():
         # Web App button that opens Postbox
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(
-                    text="📖 Открыть Postbox",
-                    web_app=WebAppInfo(url="http://localhost:3000")
-                )]
+                [InlineKeyboardButton(text="📖 Открыть Postbox", web_app=WebAppInfo(url="http://localhost:3000"))]
             ]
         )
 
         await message.answer(
-            "👋 Добро пожаловать в Postbox!\n\n"
-            "Нажмите кнопку ниже, чтобы открыть журнал писем:",
-            reply_markup=keyboard
+            "👋 Добро пожаловать в Postbox!\n\nНажмите кнопку ниже, чтобы открыть журнал писем:", reply_markup=keyboard
         )
 
     # Ignore other messages
     @dp.message()
     async def echo_handler(message: types.Message):
-        await message.answer(
-            "Используйте команду /start или нажмите кнопку 'Открыть Postbox' ↓"
-        )
+        await message.answer("Используйте команду /start или нажмите кнопку 'Открыть Postbox' ↓")
 
     print("Bot started. Press Ctrl+C to stop.")
     print(f"Chat with bot: https://t.me/{(await bot.get_me()).username}")

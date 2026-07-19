@@ -1,13 +1,9 @@
-# ruff: noqa: RUF001
-
 import asyncio
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiogram.types import Message
 from aiogram.types import User as TelegramUser
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from postbox.handlers.journal import (
     begin_journal,
     journal_detail_text,
@@ -16,6 +12,9 @@ from postbox.handlers.journal import (
 )
 from postbox.keyboards.delivery import MARK_RECEIVED_PREFIX
 from postbox.keyboards.journal import item_callback, journal_detail_keyboard, list_callback
+from postbox.texts import JOURNAL_TITLE
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from postbox.models import (
     Correspondent,
     MailDirection,
@@ -24,7 +23,6 @@ from postbox.models import (
     MailJournalStats,
     User,
 )
-from postbox.texts import JOURNAL_TITLE
 
 
 def make_mail(

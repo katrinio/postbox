@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
@@ -90,7 +89,7 @@ def create_jwt_token(
     Returns:
         Encoded JWT token
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "user_id": user_id,
         "telegram_id": telegram_id,

@@ -8,11 +8,10 @@ Usage:
 Press Ctrl+C to stop both services.
 """
 
-import subprocess
-import time
-import sys
-import os
 import signal
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 # Colors
@@ -40,13 +39,13 @@ def main():
     # Check dependencies
     try:
         subprocess.run(["poetry", "--version"], capture_output=True, check=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except subprocess.CalledProcessError, FileNotFoundError:
         print_error("poetry is not installed")
         sys.exit(1)
 
     try:
         subprocess.run(["npm", "--version"], capture_output=True, check=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except subprocess.CalledProcessError, FileNotFoundError:
         print_error("npm is not installed")
         sys.exit(1)
 
@@ -57,6 +56,7 @@ def main():
             capture_output=True,
             text=True,
             timeout=5,
+            check=False,
         )
         if "postgresql" in result.stdout and "started" not in result.stdout:
             print_info("Starting PostgreSQL...")
@@ -64,6 +64,7 @@ def main():
                 ["brew", "services", "start", "postgresql@17"],
                 capture_output=True,
                 timeout=10,
+                check=False,
             )
             time.sleep(2)
     except Exception:

@@ -44,6 +44,7 @@ class User(ActiveRecord):
     @classmethod
     async def count_approved(cls, session: AsyncSession) -> int:
         from sqlalchemy import func
+
         statement = select(func.count(cls.id)).where(cls.approved_at.isnot(None))
         return int(await session.scalar(statement) or 0)
 

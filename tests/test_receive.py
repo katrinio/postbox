@@ -5,10 +5,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram.types import User as TelegramUser
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from postbox.handlers.common import parse_date
 from postbox.handlers.receive import ReceiveMail, begin_receive, confirm_receive, receive_confirmation_text
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from postbox.models import Correspondent, MailDirection, MailItem, User
 
 

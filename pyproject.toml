@@ -76,6 +76,7 @@ select = [
     "PT",
 ]
 ignore = [
+    "RUF001", # ру-текст
     "E731", # lambdas
     "PT018", # multiple in-place asserts
     "B023", # lambda definition closures
