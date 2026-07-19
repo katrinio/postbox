@@ -118,14 +118,28 @@ export default function LoginPage() {
 
         <form onSubmit={handleDevAuth} style={{ width: "100%" }}>
           <div style={{ marginBottom: "1rem" }}>
-            <label style={{ fontSize: "0.875rem", fontWeight: "500", display: "block", marginBottom: "0.5rem" }}>
-              Telegram ID *
-            </label>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+              <label style={{ fontSize: "0.875rem", fontWeight: "500" }}>
+                Telegram ID *
+              </label>
+              <a
+                href="https://t.me/userinfobot"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#0088cc",
+                  textDecoration: "none",
+                }}
+              >
+                Узнать ID →
+              </a>
+            </div>
             <input
               type="number"
               value={telegramId}
               onChange={(e) => setTelegramId(e.target.value)}
-              placeholder="123456789"
+              placeholder="Откройте @userinfobot чтобы узнать"
               disabled={isLoading}
               style={{
                 width: "100%",
@@ -226,17 +240,27 @@ export default function LoginPage() {
           </div>
         )}
 
-        <p
+        <div
           style={{
             marginTop: "2rem",
+            padding: "1rem",
+            backgroundColor: "rgba(0, 136, 204, 0.05)",
+            borderLeft: "4px solid #0088cc",
+            borderRadius: "0.25rem",
             fontSize: "0.75rem",
             color: "var(--color-text-secondary)",
           }}
         >
-          💡 Для разработки: введите любой Telegram ID и имя.
-          <br />
-          Первые 5 пользователей будут зарегистрированы автоматически.
-        </p>
+          <strong>📱 Как найти свой Telegram ID:</strong>
+          <ol style={{ marginTop: "0.5rem", marginBottom: "0.5rem", paddingLeft: "1.25rem" }}>
+            <li>Откройте <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" style={{ color: "#0088cc" }}>@userinfobot</a></li>
+            <li>Скопируйте ваш ID из ответа</li>
+            <li>Вставьте выше и нажмите "Войти"</li>
+          </ol>
+          <p style={{ margin: "0.5rem 0 0 0" }}>
+            ✨ Первые 5 пользователей будут зарегистрированы автоматически.
+          </p>
+        </div>
       </div>
     </div>
   );
