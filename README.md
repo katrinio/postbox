@@ -24,11 +24,11 @@ Record when a letter was sent, when it arrived (if it did), and how long the jou
 
 ## Status
 
-- Telegram prototype with send, receive, delivery, journal, and notes
-
-- PostgreSQL storage and migrations
-
-- Mobile-first PWA direction without app stores
+- ✅ Telegram bot with send, receive, delivery, journal, and notes
+- ✅ Multi-user web app with Telegram Login authentication
+- ✅ Auto-approval for first 5 users (configurable limit)
+- ✅ PostgreSQL storage and migrations
+- 🚀 Mobile-first PWA without app stores
 
 ## Documentation
 

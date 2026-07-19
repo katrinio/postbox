@@ -1,9 +1,14 @@
 # Postbox web
 
-Mobile-first interface for the Postbox PWA.
+Mobile-first interface for the Postbox PWA with multi-user support and Telegram authentication.
 
-The Journal screen reads real mail records from the local Python API. The Home and New screens still use
-demonstration content while their workflows are being built.
+## Features
+
+- **Telegram Login** — Authenticate via Telegram Login Widget
+- **Multi-user support** — Up to 5 users can register (configurable limit)
+- **Auto-approval** — First 5 users are automatically approved
+- **Journal screen** — Real-time access to mail records from Python API
+- **Light/Dark themes** — System, light, or dark mode
 
 ## Requirements
 
@@ -18,7 +23,15 @@ export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
 
 ## Development
 
-Set `POSTBOX_WEB_OWNER_TELEGRAM_ID` in the repository-level `.env`, then start the API from the repository root:
+Set required environment variables in the repository-level `.env`:
+
+```bash
+POSTBOX_DATABASE_URL=postgresql+psycopg://postbox:postbox@127.0.0.1:55432/postbox
+POSTBOX_JWT_SECRET_KEY=your-secret-key-here
+POSTBOX_REGISTRATION_LIMIT=5
+```
+
+Start the API from the repository root:
 
 ```bash
 poetry run postbox-api
@@ -31,13 +44,15 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:3000>.
+Open <http://localhost:3000>. You'll be redirected to `/login` to authenticate via Telegram.
 
-The interface uses <http://localhost:8000> by default. Set `NEXT_PUBLIC_POSTBOX_API_URL` when the API is available
+The interface uses `http://localhost:8000` by default. Set `NEXT_PUBLIC_POSTBOX_API_URL` when the API is available
 at another address.
 
-The settings button in the header switches the Home screen between normal, empty, and offline preview
-states.
+## Authentication
+
+The app requires Telegram Login Widget authentication. Users are auto-approved if the user limit (default 5) is not reached.
+After approval, users receive a JWT token stored in localStorage.
 
 ## Validation
 
