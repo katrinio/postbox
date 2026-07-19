@@ -1,0 +1,94 @@
+name: 🚀 Deploy Postbox
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'web/**'
+      - 'pyproject.toml'
+      - 'poetry.lock'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - '.github/workflows/deploy.yml'
+
+concurrency:
+  group: deploy-postbox
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/katrinio/postbox:latest
+            ghcr.io/katrinio/postbox:${{ github.sha }}
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || '22' }}
+          timeout: 60s
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            cd ~/projects/postbox
+
+            # Pull latest code
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Stop and clean up
+            docker compose down --remove-orphans
+            docker system prune -f
+
+            # Pull latest image
+            docker compose pull
+
+            # Set environment variables
+            export POSTBOX_JWT_SECRET_KEY="${{ secrets.POSTBOX_JWT_SECRET_KEY }}"
+            export POSTBOX_REGISTRATION_LIMIT=5
+
+            # Start application
+            docker compose up -d
+
+            # Wait for health check
+            for i in {1..15}; do
+              if curl --fail --silent --show-error http://127.0.0.1:8000/api/health; then
+                echo "✅ Postbox is healthy"
+                docker compose ps
+                docker image prune -f
+                exit 0
+              fi
+              echo "Waiting for Postbox to be ready... ($i/15)"
+              sleep 2
+            done
+
+            echo "❌ Postbox failed to start"
+            docker compose ps
+            docker compose logs --tail=100
+            exit 1

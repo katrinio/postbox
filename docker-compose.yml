@@ -1,0 +1,25 @@
+services:
+  postbox:
+    image: ghcr.io/katrinio/postbox:latest
+    container_name: postbox
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"   # Web
+      - "127.0.0.1:8000:8000"   # API
+    environment:
+      POSTBOX_DATABASE_URL: sqlite:////data/postbox.db
+      POSTBOX_JWT_SECRET_KEY: ${POSTBOX_JWT_SECRET_KEY:-change-me-in-production}
+      POSTBOX_REGISTRATION_LIMIT: ${POSTBOX_REGISTRATION_LIMIT:-5}
+      NEXT_PUBLIC_POSTBOX_API_URL: http://localhost:8000
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - http://127.0.0.1:8000/api/health
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
