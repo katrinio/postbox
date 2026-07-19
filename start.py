@@ -50,6 +50,25 @@ def main():
         print_error("npm is not installed")
         sys.exit(1)
 
+    # Try to start PostgreSQL if not running (macOS only)
+    try:
+        result = subprocess.run(
+            ["brew", "services", "list"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if "postgresql" in result.stdout and "started" not in result.stdout:
+            print_info("Starting PostgreSQL...")
+            subprocess.run(
+                ["brew", "services", "start", "postgresql@17"],
+                capture_output=True,
+                timeout=10,
+            )
+            time.sleep(2)
+    except Exception:
+        pass  # Ignore if brew not available or PostgreSQL not installed
+
     print(f"{GREEN}Starting Postbox application...{RESET}\n")
 
     # Start API
