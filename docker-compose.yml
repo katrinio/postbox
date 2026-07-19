@@ -3,23 +3,66 @@ services:
     image: ghcr.io/katrinio/postbox:latest
     container_name: postbox
     restart: unless-stopped
+
+    # Bind only to localhost interfaces; reverse proxy is outside this container
     ports:
-      - "127.0.0.1:3000:3000"   # Web
-      - "127.0.0.1:8000:8000"   # API
+      - "127.0.0.1:3000:3000"   # Web frontend (reverse proxy only)
+      - "127.0.0.1:8000:8000"   # API backend (reverse proxy only)
+
     environment:
+      # Database: absolute path inside container
       POSTBOX_DATABASE_URL: sqlite:////data/postbox.db
-      POSTBOX_JWT_SECRET_KEY: ${POSTBOX_JWT_SECRET_KEY:-change-me-in-production}
+
+      # Security: must be set in production .env, not here
+      POSTBOX_JWT_SECRET_KEY: ${POSTBOX_JWT_SECRET_KEY}
+
+      # Configuration
       POSTBOX_REGISTRATION_LIMIT: ${POSTBOX_REGISTRATION_LIMIT:-5}
-      NEXT_PUBLIC_POSTBOX_API_URL: http://localhost:8000
+      POSTBOX_LOG_LEVEL: ${POSTBOX_LOG_LEVEL:-INFO}
+
+      # Public URL for Telegram Web App (set for production)
+      POSTBOX_PUBLIC_URL: ${POSTBOX_PUBLIC_URL:-}
+
+      # Frontend: use relative /api path in production (nginx handles routing)
+      NEXT_PUBLIC_POSTBOX_API_URL: ${NEXT_PUBLIC_POSTBOX_API_URL:-}
+
+      # Uvicorn configuration (for production, reload is false)
+      POSTBOX_API_HOST: 127.0.0.1
+      POSTBOX_API_PORT: 8000
+      POSTBOX_API_RELOAD: ${POSTBOX_API_RELOAD:-false}
+
     volumes:
-      - ./data:/data
+      # Mount only application data directory, not entire repo
+      - ./data:/data:rw
+
+    # Healthcheck uses readiness endpoint
     healthcheck:
       test:
         - CMD
         - curl
         - --fail
-        - http://127.0.0.1:8000/api/health
+        - --silent
+        - http://127.0.0.1:8000/api/ready
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
+
+    # Logging: prevent unbounded Docker JSON logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Run with non-root user (postbox:10001 defined in Dockerfile)
+    # Note: uncomment if Dockerfile sets user; commented for compatibility
+    # user: "postbox:postbox"
+
+    # Depends on network availability; no inter-service dependencies here
+    networks:
+      - postbox
+
+networks:
+  postbox:
+    driver: bridge

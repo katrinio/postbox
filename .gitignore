@@ -218,7 +218,20 @@ __marimo__/
 .streamlit/secrets.toml
 /BACKLOG.md
 
-# Postbox runtime data
+# Postbox runtime data and production files
+# (NEVER commit these - they contain user data, secrets, or sensitive backups)
 data/
+backups/
 postbox.db
 *.db
+*.db-shm
+*.db-wal
+.env
+.env.local
+.env.*.local
+
+# Production secrets (never commit)
+**/secrets/
+**/.secrets/
+*_secret_key*
+*_token*
