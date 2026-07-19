@@ -58,37 +58,54 @@ jobs:
             set -euo pipefail
             cd ~/projects/postbox
 
-            # Pull latest code
+            echo "🚀 Starting Postbox deployment..."
+
+            # 1. Pull latest code
+            echo "📥 Fetching latest code..."
             git fetch origin main
             git reset --hard origin/main
 
-            # Stop and clean up
-            docker compose down --remove-orphans
-            docker system prune -f
+            # 2. Verify .env exists (do NOT overwrite it)
+            if [[ ! -f .env ]]; then
+              echo "❌ ERROR: .env file not found!"
+              echo "   Create .env with production secrets before deploying."
+              exit 1
+            fi
+            echo "✅ .env file verified (will be preserved)"
 
-            # Pull latest image
-            docker compose pull
+            # 3. Create backup before deployment
+            if [[ -f data/postbox.db ]]; then
+              echo "💾 Creating pre-deployment backup..."
+              mkdir -p backups
+              BACKUP_TIMESTAMP=$(date -u +'%Y-%m-%dT%H%M%SZ')
+              sqlite3 "data/postbox.db" "VACUUM INTO 'backups/pre-deploy-${BACKUP_TIMESTAMP}.db'" || \
+                echo "⚠️  Backup warning (non-fatal): could not backup"
+            fi
 
-            # Set environment variables
-            export POSTBOX_JWT_SECRET_KEY="${{ secrets.POSTBOX_JWT_SECRET_KEY }}"
-            export POSTBOX_REGISTRATION_LIMIT=5
+            # 4. Build image
+            echo "🐳 Building Docker image..."
+            docker compose build
 
-            # Start application
+            # 5. Restart services gracefully
+            echo "🔄 Restarting containers..."
+            docker compose stop --timeout 30 || true
+            docker compose rm -f
             docker compose up -d
 
-            # Wait for health check
-            for i in {1..15}; do
-              if curl --fail --silent --show-error http://127.0.0.1:8000/api/health; then
+            # 6. Wait for health check
+            echo "⏳ Waiting for service to be healthy..."
+            for i in {1..30}; do
+              if curl -s --fail http://127.0.0.1:8000/api/ready >/dev/null 2>&1; then
                 echo "✅ Postbox is healthy"
                 docker compose ps
                 docker image prune -f
                 exit 0
               fi
-              echo "Waiting for Postbox to be ready... ($i/15)"
+              echo "Waiting... ($i/30)"
               sleep 2
             done
 
             echo "❌ Postbox failed to start"
             docker compose ps
-            docker compose logs --tail=100
+            docker compose logs --tail=50
             exit 1

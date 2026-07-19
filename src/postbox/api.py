@@ -138,21 +138,55 @@ def create_app(settings: WebSettings | None = None) -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+
+    # Configure CORS: allow development origins and respect reverse proxy
+    cors_origins = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+    ]
+
+    # If a public URL is configured (e.g., for Telegram Web App), allow it
+    import os
+
+    public_url = os.getenv("POSTBOX_PUBLIC_URL")
+    if public_url:
+        # Ensure https for production
+        if public_url.startswith("https://"):
+            cors_origins.append(public_url.rstrip("/"))
+        else:
+            # Allow both schemes for development
+            cors_origins.append(public_url.rstrip("/"))
+            if public_url.startswith("http://"):
+                cors_origins.append(public_url.replace("http://", "https://").rstrip("/"))
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:3001",
-        ],
-        allow_methods=["GET", "POST"],
+        allow_origins=cors_origins,
+        allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
+        allow_credentials=True,
     )
 
     @app.get("/api/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
+        """Liveness check: confirms API process is running."""
         return HealthResponse()
+
+    @app.get("/api/ready", response_model=HealthResponse)
+    async def ready(session: Annotated[AsyncSession, Depends(database_session)]) -> HealthResponse:
+        """Readiness check: confirms database is accessible."""
+        try:
+            from sqlalchemy import text
+
+            await session.execute(text("SELECT 1"))
+            return HealthResponse()
+        except Exception as error:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database not ready",
+            ) from error
 
     @app.post("/api/auth/telegram")
     async def telegram_auth(
@@ -264,4 +298,10 @@ def create_app(settings: WebSettings | None = None) -> FastAPI:
 
 
 def run() -> None:
-    uvicorn.run("postbox.api:create_app", factory=True, host="127.0.0.1", port=8000, reload=True)
+    import os
+
+    host = os.getenv("POSTBOX_API_HOST", "127.0.0.1")
+    port = int(os.getenv("POSTBOX_API_PORT", "8000"))
+    reload = os.getenv("POSTBOX_API_RELOAD", "false").lower() == "true"
+
+    uvicorn.run("postbox.api:create_app", factory=True, host=host, port=port, reload=reload)
