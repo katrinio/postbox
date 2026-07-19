@@ -1,40 +1,71 @@
+# ============================================================================
+# Docker build exclusions - be conservative with source files
+# ============================================================================
+
+# Version control
 .git
 .gitignore
 .github
+
+# Environment and secrets
 .env
+.env.local
+.env.*.local
 .env.example
+
+# Virtual environments
 .venv
-__pycache__
+venv/
+env/
+
+# Python build artifacts and caches (NOT web/build/)
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
-env/
-venv/
-.pytest_cache
-.mypy_cache
-.ruff_cache
-dist/
-build/
 *.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/  # Python package build artifacts (not web/)
+dist/   # Python distribution artifacts (not web/)
+
+# Node runtime artifacts (NOT source)
 node_modules/
-.next/
-.nuxt/
-dist/
-.cache/
-.vuepress/dist/
-.serverless/
-.fusebox/
-.dynamodb/
-.tern-port
-.vscode-test
-.yarn/cache
-.yarn/unplugged
-.yarn/build-state.yml
-.yarn/install-state.gz
-.pnp.*
-postbox.db
+web/node_modules/
+web/.next/
+web/dist/
+.wrangler/
+.vinext/
+
+# Application runtime data (never copy into image)
 data/
+backups/
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# Logs and temporary
 *.log
+*.tmp
 .DS_Store
 Thumbs.db
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing and coverage
+.coverage
+htmlcov/
+coverage/
+
+# Other unneeded
+.cache/
+.dyno.log

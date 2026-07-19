@@ -1,6 +1,9 @@
 services:
   postbox:
-    image: ghcr.io/katrinio/postbox:latest
+    # Build image locally on VPS (no remote registry)
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: postbox
     restart: unless-stopped
 
