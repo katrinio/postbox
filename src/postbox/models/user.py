@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import BigInteger, String, select
@@ -23,6 +24,7 @@ class User(ActiveRecord):
     first_name: Mapped[str] = mapped_column(String(64), nullable=False)
     last_name: Mapped[str | None] = mapped_column(String(64))
     language_code: Mapped[str | None] = mapped_column(String(16))
+    approved_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     correspondents: Mapped[list[Correspondent]] = relationship(
         back_populates="owner",
@@ -40,6 +42,12 @@ class User(ActiveRecord):
         return await session.scalar(statement)
 
     @classmethod
+    async def count_approved(cls, session: AsyncSession) -> int:
+        from sqlalchemy import func
+        statement = select(func.count(cls.id)).where(cls.approved_at.isnot(None))
+        return int(await session.scalar(statement) or 0)
+
+    @classmethod
     async def register(
         cls,
         session: AsyncSession,
@@ -49,6 +57,7 @@ class User(ActiveRecord):
         first_name: str,
         last_name: str | None,
         language_code: str | None,
+        auto_approve: bool = False,
     ) -> User:
         user = await cls.find_by_telegram_id(session, telegram_id)
         if user is None:
@@ -59,10 +68,16 @@ class User(ActiveRecord):
                 first_name=first_name,
                 last_name=last_name,
                 language_code=language_code,
+                approved_at=datetime.now() if auto_approve else None,
             )
 
         user.username = username
         user.first_name = first_name
         user.last_name = last_name
         user.language_code = language_code
+        if auto_approve and user.approved_at is None:
+            user.approved_at = datetime.now()
         return await user.save(session)
+
+    def is_approved(self) -> bool:
+        return self.approved_at is not None

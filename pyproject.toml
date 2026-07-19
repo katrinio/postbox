@@ -21,6 +21,8 @@ alembic = ">=1.18.5,<2.0.0"
 psycopg = {version = ">=3.3.4,<4.0.0", extras = ["binary"]}
 fastapi = ">=0.116,<1.0"
 uvicorn = {version = ">=0.35,<1.0", extras = ["standard"]}
+pyjwt = ">=2.8.0,<3.0.0"
+httpx = ">=0.28,<1.0"
 
 [build-system]
 requires = ["poetry-core>=1.9.0"]
