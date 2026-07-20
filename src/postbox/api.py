@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import date
 from typing import Annotated, Literal
 
 import uvicorn
@@ -215,31 +215,11 @@ def create_app(settings: WebSettings | None = None) -> FastAPI:
             auto_approve=False,
         )
 
-        # Check if user is already approved
-        if user.is_approved():
-            token = create_jwt_token(
-                user.id,
-                user.telegram_id,
-                web_settings.jwt_secret_key,
-            )
-            return AuthResponse(
-                token=token,
-                user_id=user.id,
-                telegram_id=user.telegram_id,
-                is_approved=True,
-            )
-
-        # Check registration limit
-        approved_count = await User.count_approved(session)
-        if approved_count >= web_settings.registration_limit:
+        if not await user.approve_within_limit(session, limit=web_settings.registration_limit):
             return AuthErrorResponse(
                 message="Регистрация временно закрыта. Достигнут лимит пользователей.",
                 status="awaiting_approval",
             )
-
-        # Auto-approve new user if under limit
-        user.approved_at = datetime.now()
-        await user.save(session)
 
         token = create_jwt_token(
             user.id,
