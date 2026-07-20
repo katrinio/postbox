@@ -6,7 +6,7 @@ services:
       - "127.0.0.1:8000:8000"
       - "127.0.0.1:8013:3000"
     environment:
-      POSTBOX_DATABASE_URL: sqlite:////data/postbox.db
+      POSTBOX_DATABASE_URL: sqlite+aiosqlite:////data/postbox.db
       POSTBOX_JWT_SECRET_KEY: ${POSTBOX_JWT_SECRET_KEY}
       POSTBOX_REGISTRATION_LIMIT: ${POSTBOX_REGISTRATION_LIMIT:-5}
       POSTBOX_LOG_LEVEL: ${POSTBOX_LOG_LEVEL:-INFO}
