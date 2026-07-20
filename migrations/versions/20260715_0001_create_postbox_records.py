@@ -29,7 +29,7 @@ def upgrade() -> None:
         sa.Column("first_name", sa.String(length=64), nullable=False),
         sa.Column("last_name", sa.String(length=64), nullable=True),
         sa.Column("language_code", sa.String(length=16), nullable=True),
-        sa.Column("id", sa.BigInteger(), sa.Identity(), nullable=False),
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
@@ -38,9 +38,9 @@ def upgrade() -> None:
 
     op.create_table(
         "correspondents",
-        sa.Column("owner_id", sa.BigInteger(), nullable=False),
+        sa.Column("owner_id", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(length=160), nullable=False),
-        sa.Column("id", sa.BigInteger(), sa.Identity(), nullable=False),
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.ForeignKeyConstraint(["owner_id"], ["users.id"], ondelete="CASCADE"),
@@ -52,13 +52,13 @@ def upgrade() -> None:
 
     op.create_table(
         "mail_items",
-        sa.Column("owner_id", sa.BigInteger(), nullable=False),
-        sa.Column("correspondent_id", sa.BigInteger(), nullable=False),
+        sa.Column("owner_id", sa.Integer(), nullable=False),
+        sa.Column("correspondent_id", sa.Integer(), nullable=False),
         sa.Column("direction", mail_direction, nullable=False),
         sa.Column("sent_at", sa.Date(), nullable=False),
         sa.Column("received_at", sa.Date(), nullable=True),
         sa.Column("note", sa.Text(), nullable=True),
-        sa.Column("id", sa.BigInteger(), sa.Identity(), nullable=False),
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.CheckConstraint(

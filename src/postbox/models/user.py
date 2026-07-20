@@ -82,3 +82,19 @@ class User(ActiveRecord):
 
     def is_approved(self) -> bool:
         return self.approved_at is not None
+
+    async def approve_within_limit(self, session: AsyncSession, *, limit: int) -> bool:
+        """Approve this user if the registration limit still allows it.
+
+        Already-approved users stay approved. Otherwise the user is approved
+        only while the number of approved users is below ``limit``. Returns
+        whether the user is approved; ``False`` means the limit was reached and
+        the user must wait for manual approval.
+        """
+        if self.is_approved():
+            return True
+        if await self.count_approved(session) >= limit:
+            return False
+        self.approved_at = datetime.now()
+        await self.save(session)
+        return True

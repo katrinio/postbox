@@ -6,13 +6,13 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
-    BigInteger,
     CheckConstraint,
     Date,
     Enum,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
     Text,
     case,
     func,
@@ -96,11 +96,11 @@ class MailItem(ActiveRecord):
     )
 
     owner_id: Mapped[int] = mapped_column(
-        BigInteger,
+        Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    correspondent_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    correspondent_id: Mapped[int] = mapped_column(Integer, nullable=False)
     direction: Mapped[MailDirection] = mapped_column(
         Enum(
             MailDirection,

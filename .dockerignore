@@ -65,6 +65,7 @@ Thumbs.db
 .coverage
 htmlcov/
 coverage/
+tests/
 
 # Other unneeded
 .cache/

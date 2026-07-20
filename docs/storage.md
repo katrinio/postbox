@@ -20,8 +20,12 @@ prevents a mail item from referring to another user's correspondent.
 
 ## Connection
 
-`POSTBOX_DATABASE_URL` contains the PostgreSQL connection URL. Production should
-use a dedicated database and role with only the permissions Postbox needs.
+`POSTBOX_DATABASE_URL` contains the database connection URL. Both SQLite and
+PostgreSQL are supported and both require an async driver: use
+`sqlite+aiosqlite://` for SQLite or `postgresql+psycopg://` for PostgreSQL. A
+synchronous `sqlite://` URL is rejected at startup with a configuration error.
+For PostgreSQL, production should use a dedicated database and role with only the
+permissions Postbox needs.
 
 ## Migrations and backups
 

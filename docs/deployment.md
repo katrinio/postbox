@@ -13,15 +13,20 @@ This guide covers deploying Postbox to a VPS using Docker Compose and nginx reve
             /api/*                 /             (static)
                 │                  │
         ┌───────┴──────┐     ┌─────┴──────┐
-        │ FastAPI      │     │ Next.js    │
-        │ 127.0.0.1:8000      │ 127.0.0.1:3000
+        │ FastAPI      │     │ Vinext     │
+        │ 0.0.0.0:8000 │     │ 0.0.0.0:3000
         │              │     │            │
         └──────────────┴─────┴────────────┘
         
         Docker container (postbox)
-        - Mounts ./data:/data for SQLite persistence
+        
+        Published ports (from host):
+        - 127.0.0.1:8000  → API (for health checks and debugging)
+        - 127.0.0.1:8013  → Frontend (proxied via nginx)
+        
+        Persistence:
+        - ./data/postbox.db mounted as /data (SQLite)
         - Logs rotated via docker json-file driver
-        - Health check via /api/ready endpoint
 ```
 
 ## Prerequisites
@@ -111,10 +116,10 @@ Verify containers are running:
 docker compose ps
 ```
 
-Check health:
+Check readiness:
 
 ```bash
-curl -s http://127.0.0.1:8000/api/health | jq .
+curl -s http://127.0.0.1:8000/api/ready | jq .
 ```
 
 ## nginx Configuration
@@ -129,7 +134,7 @@ upstream postbox_api {
 }
 
 upstream postbox_web {
-    server 127.0.0.1:3000;
+    server 127.0.0.1:8013;
 }
 
 server {
@@ -217,7 +222,7 @@ sudo nginx -t
 sudo systemctl reload nginx
 
 # Verify proxy is working
-curl -s https://postbox.finpipe.net/api/health | jq .
+curl -s https://postbox.finpipe.net/api/ready | jq .
 ```
 
 ### SSL Certificate
@@ -295,10 +300,10 @@ To restore from a backup:
 
 ### Uptime Kuma
 
-Configure Uptime Kuma to monitor health:
+Configure Uptime Kuma to monitor readiness:
 
 - **Type**: HTTP(s)
-- **URL**: `https://postbox.finpipe.net/api/health`
+- **URL**: `https://postbox.finpipe.net/api/ready`
 - **Method**: GET
 - **Accepted Status Code**: 200
 - **Interval**: 60 seconds
@@ -344,12 +349,20 @@ docker stats
 
 ### Automatic Deployment (GitHub Actions)
 
-After setting up GitHub secrets (`POSTBOX_HOST`, `POSTBOX_USER`, `POSTBOX_SSH_KEY`), deployment runs automatically on push to `main`.
+To enable automatic deployment on push to `main`, configure these GitHub repository secrets:
 
-The workflow:
-1. Builds Docker image
-2. Pushes to GitHub Container Registry
-3. SSH into VPS and runs deployment script
+- **VPS_HOST** — Hostname or IP address of your VPS
+- **VPS_USER** — SSH username (e.g., `ubuntu`, `root`)
+- **VPS_SSH_KEY** — Private SSH key for authentication
+- **VPS_PORT** — (Optional) SSH port, defaults to 22
+
+The workflow automatically:
+1. Builds Docker image on GitHub
+2. Pushes to GitHub Container Registry (ghcr.io)
+3. SSHes into VPS and pulls latest code
+4. Rebuilds image locally on VPS
+5. Restarts containers with zero downtime
+6. Verifies health check passes
 
 ### Manual Deployment
 
@@ -408,7 +421,8 @@ docker compose logs postbox
 Check:
 - Is `.env` file present and readable?
 - Is `POSTBOX_JWT_SECRET_KEY` set?
-- Is port 8000 and 3000 available?
+- Are ports 8000 and 8013 available? (`lsof -i :8000 -i :8013`)
+- Is `/data` directory writable?
 
 ### Health check failing
 
@@ -424,14 +438,21 @@ Check:
 ### nginx 502 Bad Gateway
 
 ```bash
+# Check nginx error log
 sudo tail -f /var/log/nginx/error.log
-curl -v http://127.0.0.1:8000/api/health
+
+# Test API directly (bypassing nginx)
+curl -v http://127.0.0.1:8000/api/ready
+
+# Test frontend directly (bypassing nginx)
+curl -v http://127.0.0.1:8013/
 ```
 
 Check:
 - Are containers running? `docker compose ps`
 - Is port 8000 listening? `netstat -an | grep 8000`
-- Check docker logs: `docker compose logs postbox`
+- Is port 8013 listening? `netstat -an | grep 8013`
+- Check container logs: `docker compose logs --tail=50 postbox`
 
 ### Database locked
 

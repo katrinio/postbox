@@ -56,6 +56,34 @@ async def test_user_registration_is_idempotent(session: AsyncSession) -> None:
     assert count == 1
 
 
+async def test_approve_within_limit_applies_registration_policy(session: AsyncSession) -> None:
+    async def new_user(telegram_id: int) -> User:
+        return await User.register(
+            session,
+            telegram_id=telegram_id,
+            username=None,
+            first_name="User",
+            last_name=None,
+            language_code=None,
+        )
+
+    first = await new_user(1001)
+    second = await new_user(1002)
+    third = await new_user(1003)
+
+    # Under the limit: users are approved on demand.
+    assert await first.approve_within_limit(session, limit=2) is True
+    assert first.is_approved()
+    assert await second.approve_within_limit(session, limit=2) is True
+
+    # Limit reached: further users must wait, and stay unapproved.
+    assert await third.approve_within_limit(session, limit=2) is False
+    assert not third.is_approved()
+
+    # Already-approved users stay approved regardless of the limit.
+    assert await first.approve_within_limit(session, limit=2) is True
+
+
 async def test_active_record_persists_mail_and_derives_status(session: AsyncSession) -> None:
     user = await User.create(
         session,

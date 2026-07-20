@@ -11,19 +11,6 @@ import jwt
 from pydantic import BaseModel
 
 
-class TelegramAuthData(BaseModel):
-    """Telegram Login Widget auth data."""
-
-    id: int
-    first_name: str
-    username: str | None = None
-    last_name: str | None = None
-    language_code: str | None = None
-    photo_url: str | None = None
-    auth_date: int
-    hash: str
-
-
 class AuthResponse(BaseModel):
     """Response for successful authentication."""
 
