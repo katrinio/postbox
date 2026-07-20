@@ -98,9 +98,6 @@ COPY --from=python-builder /app/.venv /opt/venv
 
 # Copy runtime application files.
 COPY migrations ./migrations
-COPY pyproject.toml poetry.lock README.md ./
-
-# Copy Alembic configuration when present in the repository.
 COPY alembic.ini ./alembic.ini
 
 
@@ -108,19 +105,14 @@ COPY alembic.ini ./alembic.ini
 # Copy Node.js runtime
 # ============================================================================
 
-# Copy Node.js and npm from the Debian-based Node image.
-# Both the builder and runtime are Debian-based, avoiding Alpine/glibc issues.
+# Copy Node.js binaries from the Debian-based builder image.
+# Both builder and runtime are Debian-based, avoiding Alpine/glibc issues.
 COPY --from=node-builder /usr/local/bin/node /usr/local/bin/node
 COPY --from=node-builder /usr/local/bin/npm /usr/local/bin/npm
 COPY --from=node-builder /usr/local/bin/npx /usr/local/bin/npx
-COPY --from=node-builder /usr/local/lib/node_modules /usr/local/lib/node_modules
 
-# Copy the built frontend and its installed dependencies.
-#
-# Keeping node_modules from the builder is intentional for now:
-# vinext may require packages declared as development dependencies at runtime.
-# This can be optimized later after runtime dependencies are verified.
-COPY --from=node-builder /app/web/package.json /app/web/package-lock.json ./web/
+# Copy the built frontend.
+# node_modules is copied below with Node.js binaries (required by npm start).
 COPY --from=node-builder /app/web/dist ./web/dist
 COPY --from=node-builder /app/web/node_modules ./web/node_modules
 
@@ -144,11 +136,13 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh && \
     chown postbox:postbox /usr/local/bin/docker-entrypoint.sh
 
-# Fail the build early if either runtime command is unavailable.
+# Validate that all runtime dependencies are available and functional.
 RUN command -v postbox-api && \
-    python -c "import postbox" && \
+    python -c "import postbox; print(f'✓ postbox package imports successfully')" && \
     node --version && \
-    npm --version
+    npm --version && \
+    npm list vinext 2>/dev/null | grep vinext && \
+    test -f /app/web/dist/server/index.js && echo "✓ Frontend bundled server exists"
 
 
 # ============================================================================
@@ -165,6 +159,7 @@ HEALTHCHECK \
     --timeout=5s \
     --retries=3 \
     --start-period=15s \
-    CMD curl --fail --silent http://127.0.0.1:8000/api/ready || exit 1
+    CMD curl --fail --silent http://127.0.0.1:8000/api/ready && \
+        curl --fail --silent http://127.0.0.1:3000/ >/dev/null || exit 1
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

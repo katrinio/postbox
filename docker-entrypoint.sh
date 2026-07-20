@@ -87,6 +87,37 @@ WEB_PID=$!
 
 echo "Postbox processes started (API: $API_PID, Web: $WEB_PID)"
 
+# Wait for both services to become ready (max 30 seconds).
+echo "Waiting for services to be ready..."
+waited=0
+while [ "$waited" -lt 30 ]; do
+  # Check if both processes are still alive
+  if ! kill -0 "$API_PID" 2>/dev/null || ! kill -0 "$WEB_PID" 2>/dev/null; then
+    echo "ERROR: A process died during startup"
+    shutdown "Startup failure"
+    exit 1
+  fi
+
+  # Test both endpoints
+  api_ready=0
+  web_ready=0
+
+  curl --fail --silent http://127.0.0.1:8000/api/ready >/dev/null 2>&1 && api_ready=1
+  curl --fail --silent http://127.0.0.1:3000/ >/dev/null 2>&1 && web_ready=1
+
+  if [ "$api_ready" -eq 1 ] && [ "$web_ready" -eq 1 ]; then
+    echo "✓ All services are ready"
+    break
+  fi
+
+  sleep 1
+  waited=$((waited + 1))
+done
+
+if [ "$waited" -ge 30 ]; then
+  echo "WARNING: Services did not become ready within 30s, continuing anyway"
+fi
+
 # Monitor both processes and stop the container if either one exits.
 while true; do
   if ! kill -0 "$API_PID" 2>/dev/null; then
