@@ -1,12 +1,82 @@
 #!/bin/sh
-set -euo pipefail
+set -eu
+
+API_PID=""
+WEB_PID=""
+SHUTTING_DOWN=0
 
 echo "Starting Postbox application..."
+
+shutdown() {
+  signal="${1:-SIGTERM}"
+
+  if [ "$SHUTTING_DOWN" -eq 1 ]; then
+    return
+  fi
+
+  SHUTTING_DOWN=1
+  echo "Received $signal, shutting down..."
+
+  if [ -n "$API_PID" ]; then
+    kill -TERM "$API_PID" 2>/dev/null || true
+  fi
+
+  if [ -n "$WEB_PID" ]; then
+    kill -TERM "$WEB_PID" 2>/dev/null || true
+  fi
+
+  waited=0
+
+  while [ "$waited" -lt 30 ]; do
+    api_alive=0
+    web_alive=0
+
+    if [ -n "$API_PID" ] && kill -0 "$API_PID" 2>/dev/null; then
+      api_alive=1
+    fi
+
+    if [ -n "$WEB_PID" ] && kill -0 "$WEB_PID" 2>/dev/null; then
+      web_alive=1
+    fi
+
+    if [ "$api_alive" -eq 0 ] && [ "$web_alive" -eq 0 ]; then
+      wait "$API_PID" 2>/dev/null || true
+      wait "$WEB_PID" 2>/dev/null || true
+
+      echo "All processes shut down gracefully"
+      return
+    fi
+
+    sleep 1
+    waited=$((waited + 1))
+  done
+
+  echo "Forcing shutdown of remaining processes..."
+
+  if [ -n "$API_PID" ]; then
+    kill -KILL "$API_PID" 2>/dev/null || true
+  fi
+
+  if [ -n "$WEB_PID" ]; then
+    kill -KILL "$WEB_PID" 2>/dev/null || true
+  fi
+
+  wait "$API_PID" 2>/dev/null || true
+  wait "$WEB_PID" 2>/dev/null || true
+}
+
+handle_signal() {
+  shutdown "$1"
+  exit 0
+}
+
+trap 'handle_signal SIGTERM' TERM
+trap 'handle_signal SIGINT' INT
 
 # Start API in background
 echo "Starting API server on 127.0.0.1:8000..."
 cd /app
-poetry run postbox-api &
+postbox-api &
 API_PID=$!
 
 # Start Web in background
@@ -17,37 +87,31 @@ WEB_PID=$!
 
 echo "Postbox processes started (API: $API_PID, Web: $WEB_PID)"
 
-# Handle SIGTERM and SIGINT to gracefully shut down
-trap_handler() {
-  local signal=$1
-  echo "Received $signal, shutting down..."
-
-  # Send SIGTERM to both processes
-  kill -TERM $API_PID $WEB_PID 2>/dev/null || true
-
-  # Wait for graceful shutdown (max 30 seconds)
-  local waited=0
-  while [ $waited -lt 30 ]; do
-    if ! kill -0 $API_PID 2>/dev/null && ! kill -0 $WEB_PID 2>/dev/null; then
-      echo "All processes shut down gracefully"
-      exit 0
+# Monitor both processes and stop the container if either one exits.
+while true; do
+  if ! kill -0 "$API_PID" 2>/dev/null; then
+    if wait "$API_PID"; then
+      EXIT_CODE=0
+    else
+      EXIT_CODE=$?
     fi
-    sleep 1
-    waited=$((waited + 1))
-  done
 
-  # Force kill if still running
-  echo "Forcing shutdown of remaining processes..."
-  kill -9 $API_PID $WEB_PID 2>/dev/null || true
-  exit 0
-}
+    echo "API process exited with code $EXIT_CODE"
+    shutdown "API exit"
+    exit "$EXIT_CODE"
+  fi
 
-trap "trap_handler SIGTERM" SIGTERM
-trap "trap_handler SIGINT" SIGINT
+  if ! kill -0 "$WEB_PID" 2>/dev/null; then
+    if wait "$WEB_PID"; then
+      EXIT_CODE=0
+    else
+      EXIT_CODE=$?
+    fi
 
-# Wait for both processes; if either dies, exit
-wait $API_PID $WEB_PID
-EXIT_CODE=$?
+    echo "Web process exited with code $EXIT_CODE"
+    shutdown "Web exit"
+    exit "$EXIT_CODE"
+  fi
 
-echo "Process exited with code $EXIT_CODE"
-exit $EXIT_CODE
+  sleep 1
+done

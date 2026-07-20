@@ -1,4 +1,5 @@
-# Production multi-stage build: Python API (FastAPI) + Node.js frontend (vinext)
+# Production multi-stage build:
+# Python API (FastAPI) + Node.js frontend (vinext)
 #
 # Architecture:
 #   - Python 3.14 backend on :8000
@@ -8,7 +9,7 @@
 #   - Runs as non-root user (postbox)
 
 # ============================================================================
-# Stage 1: Python API Builder
+# Stage 1: Python API builder
 # ============================================================================
 
 FROM python:3.14-slim AS python-builder
@@ -16,120 +17,152 @@ FROM python:3.14-slim AS python-builder
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     POETRY_NO_INTERACTION=1 \
-    POETRY_VIRTUALENVS_CREATE=false
+    POETRY_VIRTUALENVS_CREATE=true \
+    POETRY_VIRTUALENVS_IN_PROJECT=false \
+    POETRY_VIRTUALENVS_PATH=/opt
 
 WORKDIR /app
 
-# Install Poetry (pinned version for reproducibility)
+# Install tools required to build Python dependencies.
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends \
+        build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Poetry only in the builder image.
 RUN pip install --no-cache-dir "poetry>=1.7.0,<2.0"
 
-# Copy dependency manifests and metadata first for layer caching
-# README.md is required by pyproject.toml (readme = "README.md")
+# Copy dependency metadata first for Docker layer caching.
+# README.md is required by pyproject.toml.
 COPY pyproject.toml poetry.lock README.md ./
 
-# Copy Python source (required by Poetry to discover the package)
+# Copy the package source before Poetry installs the root package.
 COPY src ./src
 
-# Copy migrations (required at runtime)
-COPY migrations ./migrations
+# Create a dedicated virtual environment with production dependencies.
+RUN python -m venv /opt/venv && \
+    /opt/venv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    poetry env use /opt/venv/bin/python && \
+    poetry install \
+        --only main \
+        --no-interaction \
+        --no-ansi
 
-# Install production dependencies and the root package
-RUN poetry install --only main --no-interaction --no-ansi
+# Verify that the application command was installed.
+RUN test -x /opt/venv/bin/postbox-api
+
 
 # ============================================================================
-# Stage 2: Node.js Frontend Builder
+# Stage 2: Node.js frontend builder
 # ============================================================================
 
-FROM node:24-alpine AS node-builder
+FROM node:24-bookworm-slim AS node-builder
+
+ENV NODE_ENV=development
 
 WORKDIR /app/web
 
-# Copy dependency manifests
+# Copy dependency manifests first for Docker layer caching.
 COPY web/package.json web/package-lock.json ./
 
-# Install ALL dependencies (including dev) required for production build
-# Note: DO NOT use --omit=dev; vinext build requires build-time dev dependencies
+# Install all dependencies required for the production build.
 RUN npm ci
 
-# Copy complete frontend source, including:
-#   - vite.config.ts and its imports (e.g., web/build/sites-vite-plugin.ts)
-#   - app/ directory
-#   - public/ directory
-#   - all other tracked source files
+# Copy the complete frontend source.
 COPY web ./
 
-# Build frontend
+# Build the vinext frontend.
 RUN npm run build
 
+# Verify expected vinext runtime output.
+RUN test -f /app/web/dist/server/index.js
+
+
 # ============================================================================
-# Stage 3: Production Runtime
+# Stage 3: Production runtime
 # ============================================================================
 
-FROM node:24-alpine
+FROM python:3.14-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/src \
-    NODE_ENV=production
+    NODE_ENV=production \
+    PATH="/opt/venv/bin:/usr/local/bin:${PATH}"
 
 WORKDIR /app
 
-# Install Python runtime and required build dependencies
-# curl: required for Docker healthcheck
-# build-base: required if any Python packages need compilation
-RUN apk add --no-cache \
-    python3 \
-    py3-pip \
-    curl \
-    build-base
+# Install only runtime system packages.
+# curl is used by the Docker healthcheck.
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends \
+        ca-certificates \
+        curl && \
+    rm -rf /var/lib/apt/lists/*
 
 # ============================================================================
-# Copy Python artifacts from builder
+# Copy Python runtime
 # ============================================================================
 
-# Copy installed Python dependencies and the postbox package
-COPY --from=python-builder /app/src ./src
-COPY --from=python-builder /app/migrations ./migrations
-COPY --from=python-builder /app/pyproject.toml .
-COPY --from=python-builder /app/poetry.lock .
-COPY --from=python-builder /app/README.md .
+# Copy the complete virtual environment.
+# This includes:
+#   - production dependencies
+#   - the installed Postbox package
+#   - the postbox-api console command
+COPY --from=python-builder /opt/venv /opt/venv
 
-# Poetry installed packages are in site-packages (via POETRY_VIRTUALENVS_CREATE=false)
-# which are in the system Python. Since we're using the same Python image,
-# pip should have installed them in /usr/local/lib/python3.xx/site-packages
+# Copy runtime application files.
+COPY migrations ./migrations
+COPY pyproject.toml poetry.lock README.md ./
+
+# Copy Alembic configuration when present in the repository.
+COPY alembic.ini ./alembic.ini
+
 
 # ============================================================================
-# Copy Node.js artifacts from builder
+# Copy Node.js runtime
 # ============================================================================
 
-# Copy only the actual vinext runtime artifacts
-# vinext build produces:
-#   - dist/server/index.js (Node.js RSC server)
-#   - dist/client/assets/ (static assets)
-#   - dist/.openai/ (Wrangler configuration)
-# .next, public, and app/ are NOT used by vinext runtime
+# Copy Node.js and npm from the Debian-based Node image.
+# Both the builder and runtime are Debian-based, avoiding Alpine/glibc issues.
+COPY --from=node-builder /usr/local/bin/node /usr/local/bin/node
+COPY --from=node-builder /usr/local/bin/npm /usr/local/bin/npm
+COPY --from=node-builder /usr/local/bin/npx /usr/local/bin/npx
+COPY --from=node-builder /usr/local/lib/node_modules /usr/local/lib/node_modules
+
+# Copy the built frontend and its installed dependencies.
+#
+# Keeping node_modules from the builder is intentional for now:
+# vinext may require packages declared as development dependencies at runtime.
+# This can be optimized later after runtime dependencies are verified.
 COPY --from=node-builder /app/web/package.json /app/web/package-lock.json ./web/
 COPY --from=node-builder /app/web/dist ./web/dist
+COPY --from=node-builder /app/web/node_modules ./web/node_modules
 
-# Install only production dependencies required by vinext start
-# This includes the vinext CLI which npm start needs to execute
-WORKDIR /app/web
-RUN npm ci --omit=dev
-WORKDIR /app
 
 # ============================================================================
-# Setup runtime
+# Runtime setup
 # ============================================================================
 
-# Create non-root user and persistent data directory
-RUN adduser -D -u 10001 postbox && \
+# Create a non-root user and the persistent SQLite data directory.
+RUN useradd \
+        --create-home \
+        --uid 10001 \
+        --shell /usr/sbin/nologin \
+        postbox && \
     mkdir -p /data && \
-    chown -R postbox:postbox /app /data
+    chown -R postbox:postbox /app /data /opt/venv
 
-# Copy startup script
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh && \
+# Copy the signal-aware startup script.
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh && \
     chown postbox:postbox /usr/local/bin/docker-entrypoint.sh
+
+# Fail the build early if either runtime command is unavailable.
+RUN postbox-api --help >/dev/null 2>&1 || true && \
+    node --version && \
+    npm --version
+
 
 # ============================================================================
 # Final container configuration
@@ -138,12 +171,13 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh && \
 USER postbox
 WORKDIR /app
 
-# Expose internal ports (reverse proxy external)
 EXPOSE 3000 8000
 
-# Healthcheck: verify API responds
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=10s \
-    CMD curl --fail http://127.0.0.1:8000/api/ready || exit 1
+HEALTHCHECK \
+    --interval=30s \
+    --timeout=5s \
+    --retries=3 \
+    --start-period=15s \
+    CMD curl --fail --silent http://127.0.0.1:8000/api/ready || exit 1
 
-# Start both services with signal handling
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
