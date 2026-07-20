@@ -18,39 +18,25 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_CREATE=true \
-    POETRY_VIRTUALENVS_IN_PROJECT=false \
-    POETRY_VIRTUALENVS_PATH=/opt
+    POETRY_VIRTUALENVS_IN_PROJECT=true
 
 WORKDIR /app
 
-# Install tools required to build Python dependencies.
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
         build-essential && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Poetry only in the builder image.
-RUN pip install --no-cache-dir "poetry>=1.7.0,<2.0"
+RUN pip install --no-cache-dir "poetry>=2.0,<3.0"
 
-# Copy dependency metadata first for Docker layer caching.
-# README.md is required by pyproject.toml.
 COPY pyproject.toml poetry.lock README.md ./
-
-# Copy the package source before Poetry installs the root package.
 COPY src ./src
 
-# Create a dedicated virtual environment with production dependencies.
-RUN python -m venv /opt/venv && \
-    /opt/venv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    poetry env use /opt/venv/bin/python && \
-    poetry install \
+RUN poetry install \
         --only main \
         --no-interaction \
-        --no-ansi
-
-# Verify that the application command was installed.
-RUN test -x /opt/venv/bin/postbox-api
-
+        --no-ansi && \
+    test -x /app/.venv/bin/postbox-api
 
 # ============================================================================
 # Stage 2: Node.js frontend builder
@@ -108,7 +94,7 @@ RUN apt-get update && \
 #   - production dependencies
 #   - the installed Postbox package
 #   - the postbox-api console command
-COPY --from=python-builder /opt/venv /opt/venv
+COPY --from=python-builder /app/.venv /opt/venv
 
 # Copy runtime application files.
 COPY migrations ./migrations
@@ -159,7 +145,8 @@ RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh && \
     chown postbox:postbox /usr/local/bin/docker-entrypoint.sh
 
 # Fail the build early if either runtime command is unavailable.
-RUN postbox-api --help >/dev/null 2>&1 || true && \
+RUN command -v postbox-api && \
+    python -c "import postbox" && \
     node --version && \
     npm --version
 
