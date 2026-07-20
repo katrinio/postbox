@@ -16,9 +16,7 @@ FROM python:3.14-slim AS python-builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    POETRY_NO_INTERACTION=1 \
-    POETRY_VIRTUALENVS_CREATE=true \
-    POETRY_VIRTUALENVS_IN_PROJECT=true
+    POETRY_NO_INTERACTION=1
 
 WORKDIR /app
 
@@ -29,14 +27,36 @@ RUN apt-get update && \
 
 RUN pip install --no-cache-dir "poetry>=2.0,<3.0"
 
+# Copy metadata and source for build.
 COPY pyproject.toml poetry.lock README.md ./
 COPY src ./src
 
-RUN poetry install \
-        --only main \
-        --no-interaction \
-        --no-ansi && \
-    test -x /app/.venv/bin/postbox-api
+# Build the wheel.
+RUN poetry build --format wheel && \
+    wheel_file=$(ls dist/postbox-*.whl | head -1) && \
+    test -n "$wheel_file" || (echo "ERROR: No wheel produced"; exit 1) && \
+    echo "✓ Built wheel: $wheel_file"
+
+# Create a clean virtual environment and install the wheel with its dependencies.
+RUN python -m venv /opt/venv && \
+    /opt/venv/bin/pip install --no-cache-dir \
+        dist/postbox-*.whl && \
+    echo "✓ Installed wheel into /opt/venv"
+
+# Validate the installation: import postbox from outside /app, verify paths.
+RUN cd /tmp && \
+    /opt/venv/bin/python -c "
+import postbox
+import postbox.api
+postbox_path = postbox.__file__
+if '/opt/venv' not in postbox_path:
+    print(f'ERROR: postbox resolved to {postbox_path}, not /opt/venv')
+    exit(1)
+print(f'✓ postbox imports successfully from /opt/venv')
+print(f'✓ postbox.__file__ = {postbox_path}')
+" && \
+    test -x /opt/venv/bin/postbox-api && \
+    echo "✓ postbox-api console script installed and executable"
 
 # ============================================================================
 # Stage 2: Node.js frontend builder
@@ -89,14 +109,13 @@ RUN apt-get update && \
 # Copy Python runtime
 # ============================================================================
 
-# Copy the complete virtual environment.
-# This includes:
-#   - production dependencies
-#   - the installed Postbox package
-#   - the postbox-api console command
-COPY --from=python-builder /app/.venv /opt/venv
+# Copy the built virtual environment.
+# It is completely autonomous: contains the wheel-installed postbox package
+# and all its dependencies, with no references to the builder filesystem.
+COPY --from=python-builder /opt/venv /opt/venv
 
-# Copy runtime application files.
+# Copy only runtime-required data files (not source).
+# These are external resources needed at runtime, kept separate from the wheel.
 COPY migrations ./migrations
 COPY alembic.ini ./alembic.ini
 
@@ -136,13 +155,26 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh && \
     chown postbox:postbox /usr/local/bin/docker-entrypoint.sh
 
-# Validate that all runtime dependencies are available and functional.
+# Validate Python runtime: verify postbox is installed in /opt/venv and autonomous.
 RUN command -v postbox-api && \
-    python -c "import postbox; print(f'✓ postbox package imports successfully')" && \
-    node --version && \
+    /opt/venv/bin/python -c "
+import postbox
+import postbox.api
+# Verify package path is in /opt/venv, not sourced from the repo.
+postbox_path = postbox.__file__
+if '/opt/venv' not in postbox_path:
+    print(f'ERROR: postbox resolved to {postbox_path}, not /opt/venv')
+    exit(1)
+print(f'✓ postbox is autonomous in /opt/venv')
+" && \
+    echo "✓ Python runtime is valid"
+
+# Validate Node.js and frontend.
+RUN node --version && \
     npm --version && \
     npm list vinext 2>/dev/null | grep vinext && \
-    test -f /app/web/dist/server/index.js && echo "✓ Frontend bundled server exists"
+    test -f /app/web/dist/server/index.js && \
+    echo "✓ Node.js runtime is valid"
 
 
 # ============================================================================
