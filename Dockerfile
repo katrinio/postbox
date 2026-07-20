@@ -121,7 +121,7 @@ COPY alembic.ini ./alembic.ini
 
 
 # ============================================================================
-# Copy Node.js runtime
+# Copy Node.js and Frontend runtime artifacts
 # ============================================================================
 
 # Copy Node.js binaries from the Debian-based builder image.
@@ -130,8 +130,23 @@ COPY --from=node-builder /usr/local/bin/node /usr/local/bin/node
 COPY --from=node-builder /usr/local/bin/npm /usr/local/bin/npm
 COPY --from=node-builder /usr/local/bin/npx /usr/local/bin/npx
 
-# Copy the built frontend.
-# node_modules is copied below with Node.js binaries (required by npm start).
+# Copy frontend runtime artifacts.
+#
+# What is copied (required for npm start):
+#   - package.json: npm needs it to locate vinext in node_modules
+#   - dist/: built frontend artifact (self-contained, no source needed)
+#   - node_modules/: contains vinext CLI + dependencies
+#
+# What is NOT copied (not needed at runtime):
+#   - app/: Next.js source code
+#   - build/: Vite plugins (build-time only)
+#   - vite.config.ts, next.config.ts, tsconfig.json: build config
+#   - .wrangler/, .vinext/: build caches
+#   - Tests, linters, other dev artifacts
+#
+# Production simply runs: npm start → vinext start → HTTP server on :3000
+COPY --from=node-builder /app/web/package.json ./web/package.json
+COPY --from=node-builder /app/web/package-lock.json ./web/package-lock.json
 COPY --from=node-builder /app/web/dist ./web/dist
 COPY --from=node-builder /app/web/node_modules ./web/node_modules
 
@@ -169,12 +184,16 @@ print(f'✓ postbox is autonomous in /opt/venv')
 " && \
     echo "✓ Python runtime is valid"
 
-# Validate Node.js and frontend.
+# Validate Node.js and frontend runtime artifact.
 RUN node --version && \
     npm --version && \
-    npm list vinext 2>/dev/null | grep vinext && \
-    test -f /app/web/dist/server/index.js && \
-    echo "✓ Node.js runtime is valid"
+    test -f /app/web/package.json && echo "✓ package.json present" && \
+    test -x /app/web/node_modules/.bin/vinext && echo "✓ vinext CLI available" && \
+    npm list vinext 2>/dev/null | grep -q vinext && echo "✓ vinext installed" && \
+    test -d /app/web/dist/server && echo "✓ dist/server present" && \
+    test -f /app/web/dist/server/index.js && echo "✓ dist/server/index.js bundled" && \
+    test -d /app/web/dist/client && echo "✓ dist/client assets present" && \
+    echo "✓ Frontend runtime artifact valid"
 
 
 # ============================================================================
