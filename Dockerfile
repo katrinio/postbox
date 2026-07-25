@@ -33,12 +33,8 @@ RUN python -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir dist/postbox-*.whl
 
 RUN cd /tmp && \
-    /opt/venv/bin/python -c "
-import postbox
-import postbox.api
-if '/opt/venv' not in postbox.__file__:
-    exit(1)
-" && test -x /opt/venv/bin/postbox-api
+    /opt/venv/bin/python -c "import postbox; import postbox.api; assert '/opt/venv' in postbox.__file__, postbox.__file__" && \
+    test -x /opt/venv/bin/postbox-api
 
 # ============================================================================
 # node-builder: Build frontend production artifact
@@ -116,6 +112,7 @@ RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh && \
 
 # Smoke check: verify runtime commands exist
 RUN command -v postbox-api && \
+    python -c "import postbox" && \
     command -v npm && \
     test -d /app/web/dist/server && \
     test -d /app/web/dist/client
