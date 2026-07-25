@@ -87,8 +87,9 @@ COPY alembic.ini ./alembic.ini
 
 # Copy Node.js runtime (from Debian-based builder to Debian-based runtime)
 COPY --from=node-builder /usr/local/bin/node /usr/local/bin/node
-COPY --from=node-builder /usr/local/bin/npm /usr/local/bin/npm
-COPY --from=node-builder /usr/local/bin/npx /usr/local/bin/npx
+COPY --from=node-builder /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
+    ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
 # Copy frontend production artifact
 COPY --from=node-builder /app/web/package.json ./web/package.json
@@ -113,8 +114,11 @@ RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh && \
 # Smoke check: verify runtime commands exist
 RUN command -v postbox-api && \
     python -c "import postbox" && \
-    command -v npm && \
-    test -d /app/web/dist/server && \
+    node --version && \
+    npm --version && \
+    cd /app/web && \
+    npm list vinext && \
+    test -f /app/web/dist/server/index.js && \
     test -d /app/web/dist/client
 
 # Switch to unprivileged user
