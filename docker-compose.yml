@@ -12,6 +12,7 @@ services:
       POSTBOX_LOG_LEVEL: ${POSTBOX_LOG_LEVEL:-INFO}
       POSTBOX_PUBLIC_URL: ${POSTBOX_PUBLIC_URL:-}
       NEXT_PUBLIC_POSTBOX_API_URL: ${NEXT_PUBLIC_POSTBOX_API_URL:-}
+      POSTBOX_API_HOST: 0.0.0.0
       POSTBOX_API_RELOAD: "false"
     volumes:
       - ./data:/data
