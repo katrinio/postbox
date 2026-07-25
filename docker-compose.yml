@@ -4,6 +4,7 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8013:3000"
+      - "127.0.0.1:8014:8000"
     environment:
       POSTBOX_DATABASE_URL: sqlite+aiosqlite:////data/postbox.db
       POSTBOX_JWT_SECRET_KEY: ${POSTBOX_JWT_SECRET_KEY}
