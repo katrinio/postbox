@@ -22,6 +22,7 @@ from postbox.config import WebSettings
 from postbox.database import Database
 from postbox.logging import configure_logging
 from postbox.models import MailDirection, MailItem, MailJournalFilter, MailStatus, User
+from postbox.views import register_web
 
 
 class JournalStatsResponse(BaseModel):
@@ -273,6 +274,10 @@ def create_app(settings: WebSettings | None = None) -> FastAPI:
             pages=journal_page.pages,
             total=journal_page.total,
         )
+
+    # Server-rendered HTML path (Jinja templates + cookie auth), alongside the
+    # legacy JSON API above. Registered last so /api/* keeps priority.
+    register_web(app)
 
     return app
 

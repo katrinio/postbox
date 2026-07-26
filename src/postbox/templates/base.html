@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ru" suppressHydrationWarning>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#CFCEC6" />
+    <title>{% block title %}Postbox — тихая переписка{% endblock %}</title>
+    {# Resolve the saved light/dark preference before first paint to avoid a flash. #}
+    <script>
+      try {
+        var saved = localStorage.getItem("postbox-theme") || "system";
+        var dark = saved === "dark" || (saved === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+      } catch (e) {
+        document.documentElement.dataset.theme = "light";
+      }
+    </script>
+    <link rel="stylesheet" href="/static/css/app.css" />
+    <link rel="stylesheet" href="/static/css/pages.css" />
+  </head>
+  <body>
+    <main class="prototype-stage">
+      <div class="page">{% block content %}{% endblock %}</div>
+    </main>
+  </body>
+</html>

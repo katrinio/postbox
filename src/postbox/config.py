@@ -10,6 +10,13 @@ class ConfigurationError(RuntimeError):
     """Raised when Postbox cannot start with the current environment."""
 
 
+def _env_bool(name: str, *, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     """Runtime settings loaded from environment variables."""
@@ -42,17 +49,30 @@ class Settings:
 
 @dataclass(frozen=True, slots=True)
 class WebSettings:
-    """Settings for the local web API until account authentication is added."""
+    """Settings for the web application (HTTP transport + Telegram login)."""
 
     database_url: str
     jwt_secret_key: str
     log_level: str = "INFO"
     registration_limit: int = 5
+    # Telegram Login Widget: bot token verifies the signed login payload; the
+    # username renders the widget. Both come from BotFather.
+    bot_token: str | None = None
+    bot_username: str | None = None
+    # Session cookie: Secure is on by default and only disabled for local dev/test.
+    cookie_secure: bool = True
+    # Dev login: when true, a password-less dev login form is accepted. Off by
+    # default so production never bypasses Telegram signature verification.
+    dev_login: bool = False
 
     DATABASE_URL_VARIABLE: ClassVar[str] = "POSTBOX_DATABASE_URL"
     JWT_SECRET_KEY_VARIABLE: ClassVar[str] = "POSTBOX_JWT_SECRET_KEY"
     LOG_LEVEL_VARIABLE: ClassVar[str] = "POSTBOX_LOG_LEVEL"
     REGISTRATION_LIMIT_VARIABLE: ClassVar[str] = "POSTBOX_REGISTRATION_LIMIT"
+    BOT_TOKEN_VARIABLE: ClassVar[str] = "POSTBOX_BOT_TOKEN"
+    BOT_USERNAME_VARIABLE: ClassVar[str] = "POSTBOX_BOT_USERNAME"
+    COOKIE_SECURE_VARIABLE: ClassVar[str] = "POSTBOX_COOKIE_SECURE"
+    DEV_LOGIN_VARIABLE: ClassVar[str] = "POSTBOX_DEV_LOGIN"
 
     @classmethod
     def from_env(cls, env_file: str | Path = ".env") -> WebSettings:
@@ -80,4 +100,8 @@ class WebSettings:
             jwt_secret_key=jwt_secret,
             log_level=log_level,
             registration_limit=registration_limit,
+            bot_token=os.getenv(cls.BOT_TOKEN_VARIABLE, "").strip() or None,
+            bot_username=os.getenv(cls.BOT_USERNAME_VARIABLE, "").strip() or None,
+            cookie_secure=_env_bool(cls.COOKIE_SECURE_VARIABLE, default=True),
+            dev_login=_env_bool(cls.DEV_LOGIN_VARIABLE, default=False),
         )

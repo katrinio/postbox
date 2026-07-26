@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Postbox{% endblock %}
+
+{% block content %}
+<section class="home-card" aria-labelledby="home-title">
+  <p class="eyebrow">Postbox</p>
+  <h1 id="home-title">С возвращением, {{ user.first_name }}</h1>
+  <p class="auth-lead">Вы вошли через Telegram. Журнал появится здесь на следующем шаге переноса.</p>
+
+  <form method="post" action="/logout">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+    <button class="ghost-button" type="submit">Выйти</button>
+  </form>
+</section>
+{% endblock %}
