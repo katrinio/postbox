@@ -60,8 +60,10 @@ class Correspondent(ActiveRecord):
 
     @classmethod
     async def find_or_create(cls, session: AsyncSession, *, owner_id: int, name: str) -> Correspondent:
-        statement = select(cls).where(cls.owner_id == owner_id, cls.name == name)
-        correspondent = await session.scalar(statement)
-        if correspondent is not None:
-            return correspondent
+        statement = select(cls).where(cls.owner_id == owner_id)
+        results = list(await session.scalars(statement))
+        name_lower = name.casefold()
+        for c in results:
+            if c.name.casefold() == name_lower:
+                return c
         return await cls.create(session, owner_id=owner_id, name=name)

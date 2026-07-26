@@ -3,7 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#CFCEC6" />
+    <meta name="theme-color" content="#252b2e" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#cfcec6" media="(prefers-color-scheme: light)" />
+    <link rel="icon" href="/static/icons/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="/static/icons/favicon-32x32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/static/icons/favicon-16x16.png" sizes="16x16" type="image/png" />
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/static/icons/site.webmanifest" />
     <title>{% block title %}Postbox — тихая переписка{% endblock %}</title>
     <script>
       try {
