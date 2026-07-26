@@ -1,4 +1,4 @@
-"""Behavior tests for the server-rendered HTML path (Phases 1-3)."""
+"""Behavior tests for the server-rendered Postbox application."""
 
 from __future__ import annotations
 
@@ -201,77 +201,37 @@ async def test_dev_login_disabled_returns_404(tmp_path) -> None:
     assert response.status_code == 404
 
 
-# --- Phase 2: Telegram auth hardening ----------------------------------------
+# --- Removed legacy endpoints return 404/405 ---------------------------------
 
 
-async def test_legacy_api_auth_rejects_invalid_signature(tmp_path) -> None:
-    """POST /api/auth/telegram must reject fabricated signatures."""
+async def test_legacy_api_auth_removed(tmp_path) -> None:
+    """POST /api/auth/telegram was removed in Phase 5."""
     async with app_client(build_settings(tmp_path)) as client:
         response = await client.post(
             "/api/auth/telegram",
-            json={
-                "id": 999,
-                "first_name": "Hacker",
-                "auth_date": int(time.time()),
-                "hash": "0" * 64,
-            },
+            json={"id": 1, "first_name": "X", "auth_date": int(time.time()), "hash": "x"},
         )
-    assert response.status_code == 401
+    assert response.status_code in (404, 405)
 
 
-async def test_legacy_api_auth_rejects_dev_hash_by_default(tmp_path) -> None:
-    """POST /api/auth/telegram must not accept dev_hash_* when dev_login=False."""
-    async with app_client(build_settings(tmp_path, dev_login=False)) as client:
-        response = await client.post(
-            "/api/auth/telegram",
-            json={
-                "id": 999,
-                "first_name": "DevBypass",
-                "auth_date": int(time.time()),
-                "hash": "dev_hash_anything",
-            },
-        )
-    assert response.status_code == 401
-
-
-async def test_legacy_api_auth_accepts_valid_signature(tmp_path) -> None:
-    """POST /api/auth/telegram still works with a correctly-signed payload."""
-    params = signed_login(id=50, first_name="Valid")
+async def test_legacy_api_journal_removed(tmp_path) -> None:
+    """GET /api/journal was removed in Phase 5."""
     async with app_client(build_settings(tmp_path)) as client:
-        response = await client.post(
-            "/api/auth/telegram",
-            json={
-                "id": 50,
-                "first_name": "Valid",
-                "auth_date": int(params["auth_date"]),
-                "hash": params["hash"],
-            },
-        )
-    assert response.status_code == 200
-    body = response.json()
-    assert "token" in body
-    assert body["is_approved"] is True
+        await _login(client)
+        response = await client.get("/api/journal", headers={"Authorization": "Bearer fake"})
+    assert response.status_code in (404, 405)
 
 
-async def test_legacy_api_auth_rejects_stale(tmp_path) -> None:
-    """POST /api/auth/telegram rejects stale auth_date."""
-    stale_time = int(time.time()) - 7 * 24 * 3600
-    params = signed_login(id=51, first_name="Stale", auth_date=stale_time)
+async def test_no_bearer_auth_path(tmp_path) -> None:
+    """No endpoint accepts Bearer token auth after Phase 5."""
     async with app_client(build_settings(tmp_path)) as client:
-        response = await client.post(
-            "/api/auth/telegram",
-            json={
-                "id": 51,
-                "first_name": "Stale",
-                "auth_date": stale_time,
-                "hash": params["hash"],
-            },
-        )
-    assert response.status_code == 401
+        response = await client.get("/", headers={"Authorization": "Bearer fake-token"})
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
 
 
-async def test_both_auth_paths_enforce_crypto(tmp_path) -> None:
-    """Neither /auth/telegram nor /api/auth/telegram accept empty-token dev bypass."""
+async def test_web_auth_still_enforces_crypto(tmp_path) -> None:
+    """/auth/telegram rejects dev_hash when dev_login=False."""
     settings = build_settings(tmp_path, bot_token=BOT_TOKEN, dev_login=False)
     async with app_client(settings) as client:
         web = await client.get(
@@ -280,12 +240,6 @@ async def test_both_auth_paths_enforce_crypto(tmp_path) -> None:
         )
         assert web.status_code == 303
         assert "error=signature" in web.headers["location"]
-
-        api = await client.post(
-            "/api/auth/telegram",
-            json={"id": 1, "first_name": "X", "auth_date": int(time.time()), "hash": "dev_hash_test"},
-        )
-        assert api.status_code == 401
 
 
 # --- Phase 2: Journal HTML ---------------------------------------------------

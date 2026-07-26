@@ -29,11 +29,10 @@ It is a self-hosted, multi-user PWA for recording outgoing and incoming mail, de
 ## Run locally
 
 ```bash
-python start.py
+poetry run postbox-api
 ```
 
-Then open:
-- 📖 **Web**: http://localhost:3000/login
+Then open http://localhost:8000/login
 
 
 ## Documentation
