@@ -43,6 +43,76 @@
       {% if errors.note %}<p class="field-error" id="err-note">{{ errors.note }}</p>{% endif %}
     </div>
 
+    <fieldset class="form-fieldset">
+      <legend class="form-legend">Откуда <span class="field-optional">(необязательно)</span></legend>
+      <div class="location-grid">
+        <div class="form-field">
+          <label for="origin_city">Город</label>
+          <input
+            type="text"
+            id="origin_city"
+            name="origin_city"
+            value="{{ geography_values.origin_city }}"
+            placeholder="Берлин"
+            autocomplete="off"
+            {% if errors.origin_city %}aria-invalid="true" aria-describedby="err-origin-city"{% endif %}
+          />
+          {% if errors.origin_city %}<p class="field-error" id="err-origin-city">{{ errors.origin_city }}</p>{% endif %}
+        </div>
+        <div class="form-field location-grid__country">
+          <label for="origin_country">Страна</label>
+          <input
+            type="text"
+            id="origin_country"
+            name="origin_country"
+            value="{{ geography_values.origin_country }}"
+            placeholder="DE"
+            maxlength="2"
+            inputmode="latin"
+            autocomplete="off"
+            autocapitalize="characters"
+            {% if errors.origin_country %}aria-invalid="true" aria-describedby="err-origin-country"{% endif %}
+          />
+          {% if errors.origin_country %}<p class="field-error" id="err-origin-country">{{ errors.origin_country }}</p>{% endif %}
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="form-fieldset">
+      <legend class="form-legend">Куда <span class="field-optional">(необязательно)</span></legend>
+      <div class="location-grid">
+        <div class="form-field">
+          <label for="destination_city">Город</label>
+          <input
+            type="text"
+            id="destination_city"
+            name="destination_city"
+            value="{{ geography_values.destination_city }}"
+            placeholder="Париж"
+            autocomplete="off"
+            {% if errors.destination_city %}aria-invalid="true" aria-describedby="err-destination-city"{% endif %}
+          />
+          {% if errors.destination_city %}<p class="field-error" id="err-destination-city">{{ errors.destination_city }}</p>{% endif %}
+        </div>
+        <div class="form-field location-grid__country">
+          <label for="destination_country">Страна</label>
+          <input
+            type="text"
+            id="destination_country"
+            name="destination_country"
+            value="{{ geography_values.destination_country }}"
+            placeholder="FR"
+            maxlength="2"
+            inputmode="latin"
+            autocomplete="off"
+            autocapitalize="characters"
+            {% if errors.destination_country %}aria-invalid="true" aria-describedby="err-destination-country"{% endif %}
+          />
+          {% if errors.destination_country %}<p class="field-error" id="err-destination-country">{{ errors.destination_country }}</p>{% endif %}
+        </div>
+      </div>
+    </fieldset>
+
     <div class="form-actions">
       <button class="primary-button" type="submit">Сохранить</button>
       <a class="ghost-button" href="/mail/{{ item.id }}">Отмена</a>

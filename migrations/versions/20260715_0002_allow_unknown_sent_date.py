@@ -16,15 +16,16 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.alter_column("mail_items", "sent_at", nullable=True)
-    op.create_check_constraint(
-        "ck_mail_items_direction_dates",
-        "mail_items",
-        "(direction = 'outgoing' AND sent_at IS NOT NULL) OR (direction = 'incoming' AND received_at IS NOT NULL)",
-    )
+    with op.batch_alter_table("mail_items") as batch_op:
+        batch_op.alter_column("sent_at", nullable=True)
+        batch_op.create_check_constraint(
+            "ck_mail_items_direction_dates",
+            "(direction = 'outgoing' AND sent_at IS NOT NULL) OR (direction = 'incoming' AND received_at IS NOT NULL)",
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint("ck_mail_items_direction_dates", "mail_items", type_="check")
     op.execute("UPDATE mail_items SET sent_at = received_at WHERE sent_at IS NULL")
-    op.alter_column("mail_items", "sent_at", nullable=False)
+    with op.batch_alter_table("mail_items") as batch_op:
+        batch_op.drop_constraint("ck_mail_items_direction_dates", type_="check")
+        batch_op.alter_column("sent_at", nullable=False)

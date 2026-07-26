@@ -47,6 +47,14 @@
         <dd>{{ item.travel_days() }} дн.</dd>
       </div>
       {% endif %}
+
+      {% set route = format_route(item) %}
+      {% if route %}
+      <div class="detail-field detail-field--wide">
+        <dt>Маршрут</dt>
+        <dd>{{ route }}</dd>
+      </div>
+      {% endif %}
     </dl>
 
     {% if item.note %}

@@ -9,6 +9,12 @@ single file database mounted at `/data/postbox.db` inside the Docker container.
 - `correspondents` is a private address book scoped to one user.
 - `mail_items` stores incoming and outgoing paper mail.
 
+Correspondents answer "who"; mail item geography answers "where this specific
+letter travelled." A single correspondent can send from, or receive mail in,
+different places over time, so origin and destination live on `mail_items`.
+Country values are stored as optional ISO 3166-1 alpha-2 codes such as `DE`,
+`FR`, `IT`, or `CZ`. City values are optional free text.
+
 Mail status is derived from `received_at`; it is not stored separately.
 Outgoing mail always has a sent date. Incoming mail always has a received date,
 while its sent date may remain unknown when the postmark cannot be read.
