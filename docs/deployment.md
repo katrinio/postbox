@@ -21,18 +21,12 @@ This guide covers deploying Postbox to a VPS using Docker Compose and nginx reve
               │  ├── /static/...           │
               │  ├── /api/health           │
               │  ├── /api/ready            │
-              │  ├── /api/auth/telegram    │
-              │  └── /api/journal          │
-              │                            │
-              │  [vinext on :3000 — idle,  │
-              │   host 8013 — rollback]    │
               └────────────────────────────┘
 
         Docker container (postbox)
 
         Published ports (from host):
-        - 127.0.0.1:8014  → FastAPI (primary, proxied via nginx)
-        - 127.0.0.1:8013  → Vinext (rollback only, not proxied)
+        - 127.0.0.1:8014  → FastAPI (proxied via nginx)
 
         Persistence:
         - ./data/postbox.db mounted as /data (SQLite)
@@ -81,9 +75,6 @@ POSTBOX_DEV_LOGIN=false
 # Configuration
 POSTBOX_REGISTRATION_LIMIT=5
 POSTBOX_LOG_LEVEL=INFO
-
-# Legacy frontend (kept for rollback; leave empty)
-NEXT_PUBLIC_POSTBOX_API_URL=
 
 # Uvicorn
 POSTBOX_API_HOST=127.0.0.1
@@ -199,42 +190,6 @@ server {
     }
 }
 ```
-
-### Rollback to vinext frontend
-
-If the server-rendered app has issues, restore the split routing:
-
-```nginx
-upstream postbox_api {
-    server 127.0.0.1:8014;
-}
-
-upstream postbox_web {
-    server 127.0.0.1:8013;
-}
-
-server {
-    # ... same SSL/headers block ...
-
-    location /api/ {
-        proxy_pass http://postbox_api;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location / {
-        proxy_pass http://postbox_web;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-Then: `sudo nginx -t && sudo systemctl reload nginx`. No container rebuild needed.
 
 ### Enable and Test
 
@@ -457,7 +412,7 @@ docker compose logs postbox
 Check:
 - Is `.env` file present and readable?
 - Is `POSTBOX_JWT_SECRET_KEY` set?
-- Are ports 8014 and 8013 available? (`lsof -i :8014 -i :8013`)
+- Is port 8014 available? (`lsof -i :8014`)
 - Is `/data` directory writable?
 
 ### Health check failing
@@ -480,14 +435,11 @@ sudo tail -f /var/log/nginx/error.log
 # Test FastAPI directly (bypassing nginx)
 curl -v http://127.0.0.1:8014/api/ready
 
-# Test vinext directly (rollback target)
-curl -v http://127.0.0.1:8013/
 ```
 
 Check:
 - Are containers running? `docker compose ps`
 - Is port 8014 listening? `netstat -an | grep 8014`
-- Is port 8013 listening? `netstat -an | grep 8013`
 - Check container logs: `docker compose logs --tail=50 postbox`
 
 ### Database locked

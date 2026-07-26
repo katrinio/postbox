@@ -8,23 +8,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
-from pydantic import BaseModel
-
-
-class AuthResponse(BaseModel):
-    """Response for successful authentication."""
-
-    token: str
-    user_id: int
-    telegram_id: int
-    is_approved: bool
-
-
-class AuthErrorResponse(BaseModel):
-    """Response when user needs admin approval."""
-
-    message: str
-    status: str
 
 
 def validate_telegram_signature(data: dict[str, Any], token: str, allow_dev_hash: bool = True) -> bool:

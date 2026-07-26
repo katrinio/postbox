@@ -1,6 +1,6 @@
 # Server-Render Migration Plan
 
-> **Status:** Phases 0-4 complete. Production runs a single Python process. `web/` remains in the repository for Phase 5 cleanup.
+> **Status:** All phases complete. Production is a single Python process (FastAPI + Jinja2). No Node, no `web/`, no legacy JSON endpoints.
 >
 > **Phase 1 (complete):** Jinja2 infrastructure, cookie-based JWT auth, Telegram Login Widget flow, CSRF, `/login`, `/auth/telegram`, `GET /`, `POST /logout`.
 >
@@ -8,9 +8,9 @@
 >
 > **Phase 3 (complete):** nginx single upstream (`127.0.0.1:8014`). Proxy headers. Deployment docs updated.
 >
-> **Phase 4 (complete):** Node/npm/vinext removed from Docker image. Single-process entrypoint (`exec postbox-api`). Compose exposes only `127.0.0.1:8014:8000`. No port 8013. Healthcheck: Python-only `/api/ready`. Rollback model: deploy previous image tag (no instant nginx-only rollback). `web/` excluded from build context via `.dockerignore`.
+> **Phase 4 (complete):** Node/npm/vinext removed from Docker image. Single-process entrypoint (`exec postbox-api`). Compose exposes only `127.0.0.1:8014:8000`. No port 8013. Healthcheck: Python-only `/api/ready`. Rollback model: deploy previous image tag.
 >
-> **Remaining:** Phase 5 (delete `web/`, remove legacy JSON endpoints `/api/auth/telegram` and `/api/journal`, remove Bearer auth, remove CORS middleware).
+> **Phase 5 (complete):** Deleted `web/`, `start.py`, `start.sh`, `bot_example.py`, `BOT_SETUP.md`. Removed `/api/auth/telegram`, `/api/journal`, Bearer auth, CORS middleware, transport Pydantic models. Updated tests, docs, README.
 >
 > **Decisions locked (see §13):**
 > - **D1 — Telegram auth:** target a **normal browser website** using the **Telegram Login Widget** (server-side verification of Telegram-signed data → existing Postbox JWT → **HttpOnly, Secure, SameSite=Lax cookie** → POST → 303 → GET). No `localStorage`, JWT never exposed to JS. No server-side sessions unless a concrete need appears. Keep the existing JWT create/decode. The currently-disabled signature verification is a **security bug** whose fix gates completion of the auth phase.

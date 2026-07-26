@@ -31,11 +31,8 @@ __pycache__/
 build/  # Python package build artifacts (not web/)
 dist/   # Python distribution artifacts (not web/)
 
-# Frontend (no longer part of production build)
-web/
+# Frontend artifacts (historical)
 node_modules/
-.wrangler/
-.vinext/
 
 # Application runtime data (never copy into image)
 data/

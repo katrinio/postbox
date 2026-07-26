@@ -51,30 +51,11 @@ them against an isolated PostgreSQL service.
 
 ## Web application
 
-The mobile interface lives in `web/` and requires Node.js 22.13 or newer. The
-version is pinned in `web/.node-version` and `web/.nvmrc`. Start the read-only
-journal API from the repository root:
+The server-rendered web interface is built into the Python package (FastAPI + Jinja2).
+Start the application:
 
 ```bash
 poetry run postbox-api
 ```
 
-Then start the interface in a second terminal:
-
-```bash
-cd web
-npm install
-npm run dev
-```
-
-Open <http://localhost:3000>. The Journal screen reads real records from
-PostgreSQL through <http://localhost:8000>. The Home and New screens remain
-visual prototypes for now. The settings button switches the Home screen between
-normal, empty, and offline preview states.
-
-Frontend checks:
-
-```bash
-npm run lint
-npm test
-```
+Open <http://localhost:8000/login>.
