@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint, func, select
+from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -60,7 +60,7 @@ class Correspondent(ActiveRecord):
 
     @classmethod
     async def find_or_create(cls, session: AsyncSession, *, owner_id: int, name: str) -> Correspondent:
-        statement = select(cls).where(cls.owner_id == owner_id, func.lower(cls.name) == name.lower())
+        statement = select(cls).where(cls.owner_id == owner_id, cls.name == name)
         correspondent = await session.scalar(statement)
         if correspondent is not None:
             return correspondent

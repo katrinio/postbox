@@ -839,6 +839,31 @@ async def test_filtered_empty_state_differs(tmp_path) -> None:
 # --- Flash messages -----------------------------------------------------
 
 
+async def test_create_two_mails_same_correspondent(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=99, first_name="Double")
+            await client.get("/")
+            csrf = client.cookies.get("postbox_csrf")
+
+            await client.post(
+                "/mail",
+                data={"csrf_token": csrf, "direction": "outgoing", "correspondent": "Ру", "mail_date": str(today)},
+            )
+            response = await client.post(
+                "/mail",
+                data={"csrf_token": csrf, "direction": "outgoing", "correspondent": "Ру", "mail_date": str(today)},
+            )
+            assert response.status_code == 303
+
+            journal = await client.get("/")
+    assert journal.text.count("Ру") >= 2
+
+
 async def test_flash_after_create(tmp_path) -> None:
     settings = build_settings(tmp_path)
     app = create_app(settings)
