@@ -11,6 +11,7 @@ from datetime import date, timedelta
 import httpx
 
 from postbox.api import create_app
+from postbox.auth import decode_jwt_token
 from postbox.config import WebSettings
 from postbox.models import Correspondent, MailDirection, MailItem
 
@@ -57,6 +58,14 @@ async def _login(client: httpx.AsyncClient, *, telegram_id: int = 1, first_name:
     client.cookies.update(login.cookies)
 
 
+def _current_user_id(client: httpx.AsyncClient) -> int:
+    token = client.cookies.get("postbox_session")
+    assert token is not None
+    payload = decode_jwt_token(token, JWT_SECRET)
+    assert payload is not None
+    return int(payload["user_id"])
+
+
 async def _seed_mail(app, owner_id: int, items: list[dict]) -> None:
     """Insert mail items via the DB session for test setup."""
     db = app.state.database
@@ -71,6 +80,10 @@ async def _seed_mail(app, owner_id: int, items: list[dict]) -> None:
                 sent_at=item.get("sent_at"),
                 received_at=item.get("received_at"),
                 note=item.get("note"),
+                origin_country_code=item.get("origin_country_code"),
+                origin_city=item.get("origin_city"),
+                destination_country_code=item.get("destination_country_code"),
+                destination_city=item.get("destination_city"),
             )
         await session.commit()
 
@@ -350,6 +363,143 @@ async def test_journal_invalid_filter_defaults_to_all(tmp_path) -> None:
     assert response.status_code == 200
 
 
+async def test_journal_renders_geography_compactly(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=32)
+            user_id = _current_user_id(client)
+            await _seed_mail(
+                app,
+                user_id,
+                [
+                    {
+                        "correspondent": "FullRoute",
+                        "direction": "outgoing",
+                        "sent_at": today,
+                        "origin_city": "Berlin",
+                        "origin_country_code": "DE",
+                        "destination_city": "Paris",
+                        "destination_country_code": "FR",
+                    },
+                    {
+                        "correspondent": "PartialRoute",
+                        "direction": "incoming",
+                        "received_at": today,
+                        "origin_country_code": "CZ",
+                        "destination_city": "Rome",
+                    },
+                    {"correspondent": "NoRoute", "direction": "outgoing", "sent_at": today},
+                ],
+            )
+            response = await client.get("/")
+
+    assert response.status_code == 200
+    assert "Berlin, DE -&gt; Paris, FR" in response.text
+    assert "CZ -&gt; Rome" in response.text
+    assert "NoRoute" in response.text
+    assert "NoRoute</h3>" in response.text
+
+
+async def test_journal_escapes_city_geography(tmp_path) -> None:
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=33)
+            user_id = _current_user_id(client)
+            await _seed_mail(
+                app,
+                user_id,
+                [
+                    {
+                        "correspondent": "Escaped",
+                        "direction": "outgoing",
+                        "sent_at": date.today(),
+                        "origin_city": '<script>alert("x")</script>',
+                    }
+                ],
+            )
+            response = await client.get("/")
+
+    assert '<script>alert("x")</script>' not in response.text
+    assert "&lt;script&gt;" in response.text
+
+
+async def test_journal_geography_filters_compose_and_stay_private(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=34, first_name="Owner")
+            owner_id = _current_user_id(client)
+            await _seed_mail(
+                app,
+                owner_id,
+                [
+                    {
+                        "correspondent": "BerlinOutgoing",
+                        "direction": "outgoing",
+                        "sent_at": today,
+                        "origin_city": "Berlin",
+                        "origin_country_code": "DE",
+                        "destination_city": "Paris",
+                        "destination_country_code": "FR",
+                    },
+                    {
+                        "correspondent": "RomeIncoming",
+                        "direction": "incoming",
+                        "received_at": today,
+                        "origin_city": "Rome",
+                        "origin_country_code": "IT",
+                        "destination_city": "Berlin",
+                        "destination_country_code": "DE",
+                    },
+                ],
+            )
+            await _login(client, telegram_id=35, first_name="Other")
+            other_id = _current_user_id(client)
+            await _seed_mail(
+                app,
+                other_id,
+                [
+                    {
+                        "correspondent": "PrivateParis",
+                        "direction": "outgoing",
+                        "sent_at": today,
+                        "origin_city": "Berlin",
+                        "origin_country_code": "DE",
+                        "destination_city": "Paris",
+                        "destination_country_code": "FR",
+                    }
+                ],
+            )
+            await _login(client, telegram_id=34, first_name="Owner")
+
+            origin_country = await client.get("/?origin_country=de")
+            destination_country = await client.get("/?destination_country=fr")
+            origin_city = await client.get("/?origin_city= berlin ")
+            destination_city = await client.get("/?destination_city=paris")
+            composed = await client.get("/?filter=outgoing&origin_country=DE&destination_city=PARIS")
+            invalid = await client.get("/?origin_country=bad")
+
+    assert "BerlinOutgoing" in origin_country.text
+    assert "RomeIncoming" not in origin_country.text
+    assert "BerlinOutgoing" in destination_country.text
+    assert "BerlinOutgoing" in origin_city.text
+    assert "BerlinOutgoing" in destination_city.text
+    assert "BerlinOutgoing" in composed.text
+    assert "RomeIncoming" not in composed.text
+    assert "PrivateParis" not in origin_country.text
+    assert invalid.status_code == 200
+
+
 async def test_journal_other_user_data_not_visible(tmp_path) -> None:
     today = date.today()
     settings = build_settings(tmp_path)
@@ -558,6 +708,127 @@ async def test_create_incoming_mail(tmp_path) -> None:
             journal = await client.get("/")
     assert "Аня" in journal.text
     assert "Входящее" in journal.text
+
+
+async def test_create_outgoing_mail_with_full_geography(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=661)
+            await client.get("/")
+            csrf = client.cookies.get("postbox_csrf")
+            response = await client.post(
+                "/mail",
+                data={
+                    "csrf_token": csrf,
+                    "direction": "outgoing",
+                    "correspondent": "Geo Out",
+                    "mail_date": str(today),
+                    "origin_city": " Berlin ",
+                    "origin_country": "de",
+                    "destination_city": "Paris",
+                    "destination_country": "fr",
+                },
+            )
+            journal = await client.get("/")
+
+    assert response.status_code == 303
+    assert "Berlin, DE -&gt; Paris, FR" in journal.text
+
+
+async def test_create_incoming_mail_with_full_geography(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=662)
+            await client.get("/")
+            csrf = client.cookies.get("postbox_csrf")
+            response = await client.post(
+                "/mail",
+                data={
+                    "csrf_token": csrf,
+                    "direction": "incoming",
+                    "correspondent": "Geo In",
+                    "mail_date": str(today),
+                    "origin_city": "Rome",
+                    "origin_country": "it",
+                    "destination_city": "Prague",
+                    "destination_country": "cz",
+                },
+            )
+            journal = await client.get("/")
+
+    assert response.status_code == 303
+    assert "Rome, IT -&gt; Prague, CZ" in journal.text
+
+
+async def test_create_mail_with_partial_and_no_geography(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=663)
+            await client.get("/")
+            csrf = client.cookies.get("postbox_csrf")
+            partial = await client.post(
+                "/mail",
+                data={
+                    "csrf_token": csrf,
+                    "direction": "outgoing",
+                    "correspondent": "Partial",
+                    "mail_date": str(today),
+                    "origin_country": "de",
+                    "destination_city": "Paris",
+                },
+            )
+            none = await client.post(
+                "/mail",
+                data={
+                    "csrf_token": csrf,
+                    "direction": "outgoing",
+                    "correspondent": "NoGeo",
+                    "mail_date": str(today),
+                },
+            )
+            journal = await client.get("/")
+
+    assert partial.status_code == 303
+    assert none.status_code == 303
+    assert "DE -&gt; Paris" in journal.text
+    assert "NoGeo" in journal.text
+
+
+async def test_create_mail_rejects_invalid_country_and_preserves_geography(tmp_path) -> None:
+    async with app_client(build_settings(tmp_path)) as client:
+        await _login(client, telegram_id=664)
+        await client.get("/")
+        csrf = client.cookies.get("postbox_csrf")
+        response = await client.post(
+            "/mail",
+            data={
+                "csrf_token": csrf,
+                "direction": "outgoing",
+                "correspondent": "Invalid Geo",
+                "mail_date": str(date.today()),
+                "origin_city": "Berlin",
+                "origin_country": "deu",
+                "destination_city": "Paris",
+                "destination_country": "FR",
+            },
+        )
+
+    assert response.status_code == 422
+    assert "country code must be exactly 2 ASCII letters" in response.text
+    assert 'value="Berlin"' in response.text
+    assert 'value="deu"' in response.text
 
 
 async def test_create_mail_validates_empty_correspondent(tmp_path) -> None:
@@ -862,6 +1133,51 @@ async def test_change_correspondent(tmp_path) -> None:
             detail = await client.get(f"/mail/{mail_id}")
     assert "Новое имя" in detail.text
     assert "Старое имя" not in detail.text
+
+
+async def test_edit_mail_geography(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=941, first_name="GeoEditor")
+            await client.get("/")
+            csrf = client.cookies.get("postbox_csrf")
+
+            await client.post(
+                "/mail",
+                data={
+                    "csrf_token": csrf,
+                    "direction": "outgoing",
+                    "correspondent": "Route",
+                    "mail_date": str(today),
+                },
+            )
+            journal = await client.get("/")
+            import re
+
+            match = re.search(r'href="/mail/(\d+)"', journal.text)
+            assert match
+            mail_id = match.group(1)
+
+            response = await client.post(
+                f"/mail/{mail_id}/note",
+                data={
+                    "csrf_token": csrf,
+                    "correspondent": "Route",
+                    "note": "",
+                    "origin_city": "Berlin",
+                    "origin_country": "de",
+                    "destination_city": "Paris",
+                    "destination_country": "fr",
+                },
+            )
+            detail = await client.get(f"/mail/{mail_id}")
+
+    assert response.status_code == 303
+    assert "Berlin, DE -&gt; Paris, FR" in detail.text
 
 
 async def test_note_edit_form_requires_auth(tmp_path) -> None:

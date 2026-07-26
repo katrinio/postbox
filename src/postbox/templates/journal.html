@@ -20,11 +20,38 @@
     {% for fid, flabel in filters %}
     <a
       class="filter-pill{% if current_filter == fid %} filter-pill--active{% endif %}"
-      href="/?filter={{ fid }}"
+      href="{{ journal_url(filter_value=fid, geography=geography_filter) }}"
       {% if current_filter == fid %}aria-current="page"{% endif %}
     >{{ flabel }}{% if fid == "all" and stats.total %} <span class="filter-pill__count">{{ stats.total }}</span>{% elif fid == "in_transit" and stats.in_transit %} <span class="filter-pill__count">{{ stats.in_transit }}</span>{% elif fid == "outgoing" and stats.outgoing %} <span class="filter-pill__count">{{ stats.outgoing }}</span>{% elif fid == "incoming" and stats.incoming %} <span class="filter-pill__count">{{ stats.incoming }}</span>{% endif %}</a>
     {% endfor %}
   </nav>
+
+  <details class="geo-filter"{% if geography_filter.has_filters %} open{% endif %}>
+    <summary>Места{% if geography_filter.has_filters %} · фильтр включён{% endif %}</summary>
+    <form class="geo-filter__form" method="get" action="/">
+      <input type="hidden" name="filter" value="{{ current_filter }}" />
+      <label>
+        <span>Откуда страна</span>
+        <input type="text" name="origin_country" value="{{ geography_filter.origin_country_code or '' }}" placeholder="DE" maxlength="2" inputmode="latin" autocapitalize="characters" />
+      </label>
+      <label>
+        <span>Куда страна</span>
+        <input type="text" name="destination_country" value="{{ geography_filter.destination_country_code or '' }}" placeholder="FR" maxlength="2" inputmode="latin" autocapitalize="characters" />
+      </label>
+      <label>
+        <span>Откуда город</span>
+        <input type="text" name="origin_city" value="{{ geography_filter.origin_city or '' }}" placeholder="Берлин" />
+      </label>
+      <label>
+        <span>Куда город</span>
+        <input type="text" name="destination_city" value="{{ geography_filter.destination_city or '' }}" placeholder="Париж" />
+      </label>
+      <div class="geo-filter__actions">
+        <button class="ghost-button ghost-button--sm" type="submit">Применить</button>
+        <a class="ghost-button ghost-button--sm" href="/?filter={{ current_filter }}">Сбросить места</a>
+      </div>
+    </form>
+  </details>
 
   {% if journal.items %}
   <div class="journal-list">
@@ -44,6 +71,8 @@
           · {{ format_status(item) }}
           {% if item.note %}<span class="journal-row__note-indicator" title="Есть заметка">✎</span>{% endif %}
         </p>
+        {% set route = format_route(item) %}
+        {% if route %}<p class="journal-row__route">{{ route }}</p>{% endif %}
       </div>
       <time class="journal-row__date" datetime="{{ item.journal_date.isoformat() }}">{{ format_date(item.journal_date) }}</time>
     </a>
@@ -53,11 +82,11 @@
   {% if journal.pages > 1 %}
   <nav class="pagination" aria-label="Страницы журнала">
     {% if journal.page > 1 %}
-    <a class="pagination__link" href="/?filter={{ current_filter }}&amp;page={{ journal.page - 1 }}">&larr; Назад</a>
+    <a class="pagination__link" href="{{ journal_url(filter_value=current_filter, geography=geography_filter, page=journal.page - 1) }}">&larr; Назад</a>
     {% endif %}
     <span class="pagination__info">{{ journal.page }} / {{ journal.pages }}</span>
     {% if journal.page < journal.pages %}
-    <a class="pagination__link" href="/?filter={{ current_filter }}&amp;page={{ journal.page + 1 }}">Вперёд &rarr;</a>
+    <a class="pagination__link" href="{{ journal_url(filter_value=current_filter, geography=geography_filter, page=journal.page + 1) }}">Вперёд &rarr;</a>
     {% endif %}
   </nav>
   {% endif %}
@@ -66,7 +95,10 @@
 
   <div class="empty-state">
     <svg class="empty-state__icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
-    {% if current_filter == "all" %}
+    {% if geography_filter.has_filters %}
+    <p class="empty-state__title">По этим местам писем нет</p>
+    <p class="empty-state__text"><a href="/?filter={{ current_filter }}">Сбросить фильтр мест</a></p>
+    {% elif current_filter == "all" %}
     <p class="empty-state__title">Журнал пока пуст</p>
     <p class="empty-state__text">Добавьте первое отправленное или полученное письмо, чтобы начать журнал.</p>
     <a class="primary-button" href="/mail/new">Добавить письмо</a>

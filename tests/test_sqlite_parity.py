@@ -19,7 +19,7 @@ from sqlalchemy.exc import IntegrityError
 from postbox.config import ConfigurationError
 from postbox.database import Database
 from postbox.database.base import Base
-from postbox.models import Correspondent, MailDirection, MailItem, User
+from postbox.models import Correspondent, MailDirection, MailGeographyError, MailItem, User
 
 
 @pytest_asyncio.fixture
@@ -70,6 +70,78 @@ async def test_inserts_generate_integer_ids_without_explicit_id(database: Databa
         )
         assert isinstance(mail.id, int) and mail.id > 0
         await session.commit()
+
+
+async def test_existing_mail_rows_allow_null_geography(database: Database) -> None:
+    async with database.session_factory() as session:
+        user = await _make_user(session, telegram_id=2)
+        correspondent = await Correspondent.create(session, owner_id=user.id, name="No geography")
+        mail = await MailItem.create(
+            session,
+            owner_id=user.id,
+            correspondent_id=correspondent.id,
+            direction=MailDirection.OUTGOING,
+            sent_at=date(2026, 7, 15),
+        )
+        await session.commit()
+
+    assert mail.origin_country_code is None
+    assert mail.origin_city is None
+    assert mail.destination_country_code is None
+    assert mail.destination_city is None
+
+
+async def test_mail_geography_is_normalized(database: Database) -> None:
+    async with database.session_factory() as session:
+        user = await _make_user(session, telegram_id=3)
+        correspondent = await Correspondent.create(session, owner_id=user.id, name="Geo")
+        mail = await MailItem.create(
+            session,
+            owner_id=user.id,
+            correspondent_id=correspondent.id,
+            direction=MailDirection.OUTGOING,
+            sent_at=date(2026, 7, 15),
+            origin_country_code=" de ",
+            origin_city="  Berlin  ",
+            destination_country_code="fr",
+            destination_city="  ",
+        )
+        await session.commit()
+
+    assert mail.origin_country_code == "DE"
+    assert mail.origin_city == "Berlin"
+    assert mail.destination_country_code == "FR"
+    assert mail.destination_city is None
+
+
+async def test_invalid_country_codes_are_rejected(database: Database) -> None:
+    async with database.session_factory() as session:
+        user = await _make_user(session, telegram_id=4)
+        correspondent = await Correspondent.create(session, owner_id=user.id, name="Bad Geo")
+        with pytest.raises(MailGeographyError):
+            await MailItem.create(
+                session,
+                owner_id=user.id,
+                correspondent_id=correspondent.id,
+                direction=MailDirection.OUTGOING,
+                sent_at=date(2026, 7, 15),
+                origin_country_code="D3",
+            )
+
+
+async def test_city_length_is_rejected(database: Database) -> None:
+    async with database.session_factory() as session:
+        user = await _make_user(session, telegram_id=5)
+        correspondent = await Correspondent.create(session, owner_id=user.id, name="Long City")
+        with pytest.raises(MailGeographyError):
+            await MailItem.create(
+                session,
+                owner_id=user.id,
+                correspondent_id=correspondent.id,
+                direction=MailDirection.OUTGOING,
+                sent_at=date(2026, 7, 15),
+                origin_city="x" * 121,
+            )
 
 
 async def test_row_referencing_missing_user_is_rejected(database: Database) -> None:

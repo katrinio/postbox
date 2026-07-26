@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator
 from datetime import date
 from pathlib import Path
 from typing import Annotated
-from urllib.parse import quote, unquote
+from urllib.parse import quote, unquote, urlencode
 
 from fastapi import APIRouter, Depends, FastAPI, Form, HTTPException, Request, status
 from fastapi.staticfiles import StaticFiles
@@ -22,6 +22,8 @@ from postbox.models import (
     Correspondent,
     MailDeliveryError,
     MailDirection,
+    MailGeographyError,
+    MailGeographyFilter,
     MailItem,
     MailJournalFilter,
     MailNoteError,
@@ -76,9 +78,45 @@ def _format_status(item: MailItem) -> str:
     return "Дошло" if days is None else f"Дошло за {days} дн."
 
 
+def _format_location(city: str | None, country_code: str | None) -> str:
+    parts = [part for part in (city, country_code) if part]
+    return ", ".join(parts)
+
+
+def _format_route(item: MailItem) -> str:
+    origin = _format_location(item.origin_city, item.origin_country_code)
+    destination = _format_location(item.destination_city, item.destination_country_code)
+    if origin and destination:
+        return f"{origin} -> {destination}"
+    return origin or destination
+
+
+def _journal_url(
+    *,
+    filter_value: str = "all",
+    page: int | None = None,
+    geography: MailGeographyFilter | None = None,
+) -> str:
+    params: dict[str, str | int] = {"filter": filter_value}
+    if geography:
+        if geography.origin_country_code:
+            params["origin_country"] = geography.origin_country_code
+        if geography.destination_country_code:
+            params["destination_country"] = geography.destination_country_code
+        if geography.origin_city:
+            params["origin_city"] = geography.origin_city
+        if geography.destination_city:
+            params["destination_city"] = geography.destination_city
+    if page is not None:
+        params["page"] = page
+    return f"/?{urlencode(params)}"
+
+
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 templates.env.globals["format_date"] = _format_date
 templates.env.globals["format_status"] = _format_status
+templates.env.globals["format_route"] = _format_route
+templates.env.globals["journal_url"] = _journal_url
 router = APIRouter()
 
 
@@ -141,6 +179,83 @@ def _verify_csrf(request: Request, form_token: str) -> None:
     cookie_token = request.cookies.get(CSRF_COOKIE, "")
     if not cookie_token or not hmac.compare_digest(cookie_token, form_token):
         raise HTTPException(status_code=status.HTTP_303_SEE_OTHER, headers={"Location": "/login?error=csrf"})
+
+
+def _empty_mail_form_values() -> dict[str, str]:
+    return {
+        "direction": "outgoing",
+        "correspondent": "",
+        "date": str(date.today()),
+        "note": "",
+        "origin_city": "",
+        "origin_country": "",
+        "destination_city": "",
+        "destination_country": "",
+    }
+
+
+def _geography_form_values(
+    *,
+    origin_city: str,
+    origin_country: str,
+    destination_city: str,
+    destination_country: str,
+) -> dict[str, str]:
+    return {
+        "origin_city": origin_city.strip(),
+        "origin_country": origin_country.strip(),
+        "destination_city": destination_city.strip(),
+        "destination_country": destination_country.strip(),
+    }
+
+
+def _geography_values_from_item(item: MailItem) -> dict[str, str]:
+    return {
+        "origin_city": item.origin_city or "",
+        "origin_country": item.origin_country_code or "",
+        "destination_city": item.destination_city or "",
+        "destination_country": item.destination_country_code or "",
+    }
+
+
+def _parse_geography_filter(request: Request) -> MailGeographyFilter:
+    try:
+        return MailItem.normalize_geography_filter(
+            origin_country=request.query_params.get("origin_country"),
+            origin_city=request.query_params.get("origin_city"),
+            destination_country=request.query_params.get("destination_country"),
+            destination_city=request.query_params.get("destination_city"),
+        )
+    except MailGeographyError:
+        return MailGeographyFilter()
+
+
+def _validate_geography_form(
+    *,
+    origin_city: str,
+    origin_country: str,
+    destination_city: str,
+    destination_country: str,
+) -> tuple[dict[str, str], dict[str, str | None]]:
+    errors: dict[str, str] = {}
+    values: dict[str, str | None] = {
+        "origin_country_code": None,
+        "origin_city": None,
+        "destination_country_code": None,
+        "destination_city": None,
+    }
+    checks = [
+        ("origin_country", "origin_country_code", origin_country, MailItem.normalize_country_code),
+        ("destination_country", "destination_country_code", destination_country, MailItem.normalize_country_code),
+        ("origin_city", "origin_city", origin_city, MailItem.normalize_city),
+        ("destination_city", "destination_city", destination_city, MailItem.normalize_city),
+    ]
+    for error_key, value_key, raw_value, normalizer in checks:
+        try:
+            values[value_key] = normalizer(raw_value)
+        except MailGeographyError as error:
+            errors[error_key] = str(error)
+    return errors, values
 
 
 # --- Flash messages (cookie-based, one-shot) ---
@@ -302,7 +417,16 @@ async def home(
     except ValueError, TypeError:
         page = 1
 
-    journal = await MailItem.journal_page(session, user_id, view=view, page=page, page_size=JOURNAL_PAGE_SIZE)
+    geography_filter = _parse_geography_filter(request)
+
+    journal = await MailItem.journal_page(
+        session,
+        user_id,
+        view=view,
+        geography=geography_filter,
+        page=page,
+        page_size=JOURNAL_PAGE_SIZE,
+    )
     stats = await MailItem.journal_stats(session, user_id)
     csrf = _csrf_token(request)
     raw_flash = request.cookies.get(FLASH_COOKIE)
@@ -316,6 +440,7 @@ async def home(
             "stats": stats,
             "filters": JOURNAL_FILTERS,
             "current_filter": view.value,
+            "geography_filter": geography_filter,
             "csrf_token": csrf,
             "flash": flash,
             "today": date.today(),
@@ -350,7 +475,7 @@ async def new_mail_form(
             "csrf_token": csrf,
             "correspondents": correspondents,
             "errors": {},
-            "values": {"direction": "outgoing", "correspondent": "", "date": str(date.today()), "note": ""},
+            "values": _empty_mail_form_values(),
             "today": str(date.today()),
         },
     )
@@ -368,6 +493,10 @@ async def create_mail(
     correspondent: Annotated[str, Form()] = "",
     mail_date: Annotated[str, Form()] = "",
     note: Annotated[str, Form()] = "",
+    origin_city: Annotated[str, Form()] = "",
+    origin_country: Annotated[str, Form()] = "",
+    destination_city: Annotated[str, Form()] = "",
+    destination_country: Annotated[str, Form()] = "",
 ) -> Response:
     _verify_csrf(request, csrf_token)
     settings = _settings(request)
@@ -400,11 +529,16 @@ async def create_mail(
     note_text = note.strip() or None
     if note_text:
         try:
-            from postbox.models import MailItem as _MI
-
-            note_text = _MI.normalize_note(note_text)
+            note_text = MailItem.normalize_note(note_text)
         except MailNoteError as e:
             errors["note"] = str(e)
+    geography_errors, geography_values = _validate_geography_form(
+        origin_city=origin_city,
+        origin_country=origin_country,
+        destination_city=destination_city,
+        destination_country=destination_country,
+    )
+    errors.update(geography_errors)
 
     if errors:
         correspondents = await Correspondent.for_owner(session, user_id)
@@ -422,6 +556,12 @@ async def create_mail(
                     "correspondent": correspondent_name,
                     "date": mail_date.strip(),
                     "note": note.strip(),
+                    **_geography_form_values(
+                        origin_city=origin_city,
+                        origin_country=origin_country,
+                        destination_city=destination_city,
+                        destination_country=destination_country,
+                    ),
                 },
                 "today": str(date.today()),
             },
@@ -444,6 +584,7 @@ async def create_mail(
         sent_at=sent_at,
         received_at=received_at,
         note=note_text,
+        **geography_values,
     )
     await session.commit()
 
@@ -513,6 +654,7 @@ async def edit_note_form(
             "errors": {},
             "correspondent_value": item.correspondent.name,
             "note_value": item.note or "",
+            "geography_values": _geography_values_from_item(item),
             "correspondents": correspondents,
         },
     )
@@ -529,6 +671,10 @@ async def update_note(
     csrf_token: Annotated[str, Form()],
     correspondent: Annotated[str, Form()] = "",
     note: Annotated[str, Form()] = "",
+    origin_city: Annotated[str, Form()] = "",
+    origin_country: Annotated[str, Form()] = "",
+    destination_city: Annotated[str, Form()] = "",
+    destination_country: Annotated[str, Form()] = "",
 ) -> Response:
     _verify_csrf(request, csrf_token)
     settings = _settings(request)
@@ -550,6 +696,13 @@ async def update_note(
             note_text = MailItem.normalize_note(note_text)
         except MailNoteError as e:
             errors["note"] = str(e)
+    geography_errors, geography_values = _validate_geography_form(
+        origin_city=origin_city,
+        origin_country=origin_country,
+        destination_city=destination_city,
+        destination_country=destination_country,
+    )
+    errors.update(geography_errors)
 
     if errors:
         correspondents = await Correspondent.for_owner(session, user_id)
@@ -564,6 +717,12 @@ async def update_note(
                 "errors": errors,
                 "correspondent_value": correspondent_name,
                 "note_value": note.strip(),
+                "geography_values": _geography_form_values(
+                    origin_city=origin_city,
+                    origin_country=origin_country,
+                    destination_city=destination_city,
+                    destination_country=destination_country,
+                ),
                 "correspondents": correspondents,
             },
             status_code=422,
@@ -576,6 +735,7 @@ async def update_note(
         item.correspondent_id = corr.id
 
     await item.set_note(session, note=note_text)
+    await item.set_geography(session, **geography_values)
     await session.commit()
 
     redirect = RedirectResponse(f"/mail/{mail_id}", status_code=303)
