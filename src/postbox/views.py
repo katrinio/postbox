@@ -502,6 +502,7 @@ async def edit_note_form(
         raise NotAuthenticated
     item = await _load_item(session, user_id, mail_id)
     csrf = _csrf_token(request)
+    correspondents = await Correspondent.for_owner(session, user_id)
     response = templates.TemplateResponse(
         request,
         "mail_edit.html",
@@ -509,8 +510,10 @@ async def edit_note_form(
             "user": user,
             "item": item,
             "csrf_token": csrf,
-            "error": None,
+            "errors": {},
+            "correspondent_value": item.correspondent.name,
             "note_value": item.note or "",
+            "correspondents": correspondents,
         },
     )
     _set_csrf_cookie(response, csrf, settings)
@@ -524,6 +527,7 @@ async def update_note(
     user_id: Annotated[int, Depends(current_user_id)],
     session: Annotated[AsyncSession, Depends(web_session)],
     csrf_token: Annotated[str, Form()],
+    correspondent: Annotated[str, Form()] = "",
     note: Annotated[str, Form()] = "",
 ) -> Response:
     _verify_csrf(request, csrf_token)
@@ -533,11 +537,22 @@ async def update_note(
         raise NotAuthenticated
     item = await _load_item(session, user_id, mail_id)
 
+    errors: dict[str, str] = {}
+    correspondent_name = correspondent.strip()
+    if not correspondent_name:
+        errors["correspondent"] = "Укажите имя адресата."
+    elif len(correspondent_name) > 160:
+        errors["correspondent"] = "Имя слишком длинное (максимум 160 символов)."
+
     note_text = note.strip() or None
-    try:
-        await item.set_note(session, note=note_text)
-        await session.commit()
-    except MailNoteError as e:
+    if note_text:
+        try:
+            note_text = MailItem.normalize_note(note_text)
+        except MailNoteError as e:
+            errors["note"] = str(e)
+
+    if errors:
+        correspondents = await Correspondent.for_owner(session, user_id)
         csrf = _csrf_token(request)
         response = templates.TemplateResponse(
             request,
@@ -546,16 +561,25 @@ async def update_note(
                 "user": user,
                 "item": item,
                 "csrf_token": csrf,
-                "error": str(e),
+                "errors": errors,
+                "correspondent_value": correspondent_name,
                 "note_value": note.strip(),
+                "correspondents": correspondents,
             },
             status_code=422,
         )
         _set_csrf_cookie(response, csrf, settings)
         return response
 
+    if correspondent_name != item.correspondent.name:
+        corr = await Correspondent.find_or_create(session, owner_id=user_id, name=correspondent_name)
+        item.correspondent_id = corr.id
+
+    await item.set_note(session, note=note_text)
+    await session.commit()
+
     redirect = RedirectResponse(f"/mail/{mail_id}", status_code=303)
-    _set_flash(redirect, "Заметка сохранена.")
+    _set_flash(redirect, "Изменения сохранены.")
     return redirect
 
 

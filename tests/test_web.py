@@ -714,7 +714,7 @@ async def test_add_note(tmp_path) -> None:
 
             response = await client.post(
                 f"/mail/{mail_id}/note",
-                data={"csrf_token": csrf, "note": "Привет из Москвы"},
+                data={"csrf_token": csrf, "correspondent": "Заметочный", "note": "Привет из Москвы"},
             )
             assert response.status_code == 303
 
@@ -753,12 +753,51 @@ async def test_clear_note(tmp_path) -> None:
 
             response = await client.post(
                 f"/mail/{mail_id}/note",
-                data={"csrf_token": csrf, "note": ""},
+                data={"csrf_token": csrf, "correspondent": "Очищаемый", "note": ""},
             )
             assert response.status_code == 303
 
             detail = await client.get(f"/mail/{mail_id}")
     assert "Будет удалено" not in detail.text
+
+
+async def test_change_correspondent(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=94, first_name="Changer")
+            await client.get("/")
+            csrf = client.cookies.get("postbox_csrf")
+
+            await client.post(
+                "/mail",
+                data={
+                    "csrf_token": csrf,
+                    "direction": "outgoing",
+                    "correspondent": "Старое имя",
+                    "mail_date": str(today),
+                },
+            )
+
+            journal = await client.get("/")
+            import re
+
+            match = re.search(r'href="/mail/(\d+)"', journal.text)
+            assert match
+            mail_id = match.group(1)
+
+            response = await client.post(
+                f"/mail/{mail_id}/note",
+                data={"csrf_token": csrf, "correspondent": "Новое имя", "note": ""},
+            )
+            assert response.status_code == 303
+
+            detail = await client.get(f"/mail/{mail_id}")
+    assert "Новое имя" in detail.text
+    assert "Старое имя" not in detail.text
 
 
 async def test_note_edit_form_requires_auth(tmp_path) -> None:
@@ -785,7 +824,9 @@ async def test_note_other_user_returns_404(tmp_path) -> None:
             await _login(client, telegram_id=93, first_name="Other")
             await client.get("/")
             csrf = client.cookies.get("postbox_csrf")
-            response = await client.post("/mail/1/note", data={"csrf_token": csrf, "note": "Hacked"})
+            response = await client.post(
+                "/mail/1/note", data={"csrf_token": csrf, "correspondent": "Hacked", "note": "Hacked"}
+            )
     assert response.status_code == 404
 
 

@@ -58,7 +58,7 @@
 
     <div class="detail-actions">
       <a class="ghost-button" href="/mail/{{ item.id }}/edit">
-        {% if item.note %}Редактировать заметку{% else %}Добавить заметку{% endif %}
+        Редактировать
       </a>
 
       {% if item.direction.value == "outgoing" and item.status.value == "in_transit" %}
