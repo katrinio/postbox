@@ -429,6 +429,70 @@ async def test_static_pages_css_served(tmp_path) -> None:
     assert "site-header" in response.text
 
 
+# --- Favicon, icons, PWA manifest ---------------------------------------
+
+
+async def test_favicon_reachable(tmp_path) -> None:
+    async with app_client(build_settings(tmp_path)) as client:
+        response = await client.get("/static/icons/favicon.ico")
+    assert response.status_code == 200
+
+
+async def test_apple_touch_icon_reachable(tmp_path) -> None:
+    async with app_client(build_settings(tmp_path)) as client:
+        response = await client.get("/static/icons/apple-touch-icon.png")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+
+
+async def test_icon_192_reachable(tmp_path) -> None:
+    async with app_client(build_settings(tmp_path)) as client:
+        response = await client.get("/static/icons/icon-192.png")
+    assert response.status_code == 200
+
+
+async def test_icon_512_reachable(tmp_path) -> None:
+    async with app_client(build_settings(tmp_path)) as client:
+        response = await client.get("/static/icons/icon-512.png")
+    assert response.status_code == 200
+
+
+async def test_icon_maskable_reachable(tmp_path) -> None:
+    async with app_client(build_settings(tmp_path)) as client:
+        response = await client.get("/static/icons/icon-maskable-512.png")
+    assert response.status_code == 200
+
+
+async def test_manifest_reachable_with_correct_content_type(tmp_path) -> None:
+    async with app_client(build_settings(tmp_path)) as client:
+        response = await client.get("/static/icons/site.webmanifest")
+    assert response.status_code == 200
+    assert "json" in response.headers["content-type"]
+    manifest = response.json()
+    assert manifest["name"] == "Postbox"
+    assert manifest["display"] == "standalone"
+    assert manifest["theme_color"] == "#252b2e"
+    assert manifest["background_color"] == "#252b2e"
+
+
+async def test_manifest_icon_urls_are_reachable(tmp_path) -> None:
+    async with app_client(build_settings(tmp_path)) as client:
+        manifest = (await client.get("/static/icons/site.webmanifest")).json()
+        for icon in manifest["icons"]:
+            r = await client.get(icon["src"])
+            assert r.status_code == 200, f"{icon['src']} not reachable"
+
+
+async def test_html_contains_icon_and_manifest_links(tmp_path) -> None:
+    async with app_client(build_settings(tmp_path)) as client:
+        response = await client.get("/login")
+    html = response.text
+    assert 'href="/static/icons/favicon.ico"' in html
+    assert 'href="/static/icons/apple-touch-icon.png"' in html
+    assert 'href="/static/icons/site.webmanifest"' in html
+    assert 'rel="manifest"' in html
+
+
 # --- Create mail --------------------------------------------------------
 
 
