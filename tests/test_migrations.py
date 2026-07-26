@@ -25,7 +25,7 @@ def _run_alembic(database_url: str, *args: str) -> None:
 
 def test_mail_geography_migration_preserves_existing_sqlite_rows(tmp_path) -> None:
     database_path = tmp_path / "migration.db"
-    database_url = f"sqlite:///{database_path}"
+    database_url = f"sqlite+aiosqlite:///{database_path}"
 
     _run_alembic(database_url, "upgrade", "20260719_0003")
 
