@@ -16,7 +16,7 @@ from postbox.auth import (
     AuthResponse,
     create_jwt_token,
     decode_jwt_token,
-    validate_telegram_signature,
+    verify_telegram_login,
 )
 from postbox.config import WebSettings
 from postbox.database import Database
@@ -196,10 +196,13 @@ def create_app(settings: WebSettings | None = None) -> FastAPI:
         session: Annotated[AsyncSession, Depends(database_session)],
     ) -> AuthResponse | AuthErrorResponse:
         """Authenticate user via Telegram Login Widget."""
-        # Validate Telegram signature (dev hashes are allowed for development)
         data_dict = login_data.model_dump()
-        # For development, dev_hash_* is accepted. For production, provide real bot token.
-        if not validate_telegram_signature(data_dict.copy(), "", allow_dev_hash=True):
+        data_dict = {k: str(v) for k, v in data_dict.items() if v is not None}
+        if not verify_telegram_login(
+            data_dict,
+            bot_token=web_settings.bot_token or "",
+            allow_dev_hash=web_settings.dev_login,
+        ):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid Telegram signature",

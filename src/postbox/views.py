@@ -10,6 +10,7 @@ from __future__ import annotations
 import hmac
 import secrets
 from collections.abc import AsyncIterator
+from datetime import date
 from pathlib import Path
 from typing import Annotated
 
@@ -21,7 +22,7 @@ from starlette.responses import RedirectResponse, Response
 
 from postbox.auth import create_jwt_token, decode_jwt_token, verify_telegram_login
 from postbox.config import WebSettings
-from postbox.models import User
+from postbox.models import MailDirection, MailItem, MailJournalFilter, MailStatus, User
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 TEMPLATES_DIR = PACKAGE_ROOT / "templates"
@@ -40,7 +41,40 @@ LOGIN_ERRORS = {
     "csrf": "Сессия устарела. Обновите страницу и попробуйте снова.",
 }
 
+_DATE_MONTHS = [
+    "",
+    "января",
+    "февраля",
+    "марта",
+    "апреля",
+    "мая",
+    "июня",
+    "июля",
+    "августа",
+    "сентября",
+    "октября",
+    "ноября",
+    "декабря",
+]
+
+
+def _format_date(value: date) -> str:
+    return f"{value.day} {_DATE_MONTHS[value.month]}"
+
+
+def _format_status(item: MailItem) -> str:
+    if item.direction is MailDirection.INCOMING:
+        return "Получено"
+    if item.status is MailStatus.IN_TRANSIT:
+        days = item.travel_days()
+        return "В пути" if days is None else f"В пути · {days} дн."
+    days = item.travel_days()
+    return "Дошло" if days is None else f"Дошло за {days} дн."
+
+
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+templates.env.globals["format_date"] = _format_date
+templates.env.globals["format_status"] = _format_status
 router = APIRouter()
 
 
@@ -210,6 +244,16 @@ async def logout(request: Request, csrf_token: Annotated[str, Form()]) -> Respon
     return response
 
 
+JOURNAL_FILTERS = [
+    ("all", "Все"),
+    ("in_transit", "В пути"),
+    ("outgoing", "Исходящие"),
+    ("incoming", "Входящие"),
+]
+
+JOURNAL_PAGE_SIZE = 50
+
+
 @router.get("/")
 async def home(
     request: Request,
@@ -220,8 +264,34 @@ async def home(
     user = await User.get(session, user_id)
     if user is None:
         raise NotAuthenticated
+
+    filter_param = request.query_params.get("filter", "all")
+    try:
+        view = MailJournalFilter(filter_param)
+    except ValueError:
+        view = MailJournalFilter.ALL
+
+    page_param = request.query_params.get("page", "1")
+    try:
+        page = max(1, int(page_param))
+    except ValueError, TypeError:
+        page = 1
+
+    journal = await MailItem.journal_page(session, user_id, view=view, page=page, page_size=JOURNAL_PAGE_SIZE)
+    stats = await MailItem.journal_stats(session, user_id)
     csrf = _csrf_token(request)
-    response = templates.TemplateResponse(request, "home.html", {"user": user, "csrf_token": csrf})
+    response = templates.TemplateResponse(
+        request,
+        "journal.html",
+        {
+            "user": user,
+            "journal": journal,
+            "stats": stats,
+            "filters": JOURNAL_FILTERS,
+            "current_filter": view.value,
+            "csrf_token": csrf,
+        },
+    )
     _set_csrf_cookie(response, csrf, settings)
     return response
 

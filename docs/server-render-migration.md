@@ -1,6 +1,10 @@
 # Server-Render Migration Plan
 
-> **Status:** planning only. No migration performed. No Docker/frontend/deployment changes. Source of truth for later implementation sessions.
+> **Status:** Phases 0-2 complete. Phase 1 (auth + Jinja infrastructure) and Phase 2 (secure auth consolidation + journal read) are implemented. No Docker/frontend/deployment changes yet. Source of truth for later implementation sessions.
+>
+> **Phase 1 (complete):** Jinja2 infrastructure, cookie-based JWT auth, Telegram Login Widget flow, CSRF, `/login`, `/auth/telegram`, `GET /`, `POST /logout`. All tests pass.
+>
+> **Phase 2 (complete):** Legacy `/api/auth/telegram` hardened to use `verify_telegram_login` with real bot_token (no more `allow_dev_hash=True` by default, no empty-secret fallback). `validate_telegram_signature` uses `hmac.compare_digest`. `GET /` now renders the real journal (list + stats + server-side filters). Navigation header added. 26 web tests pass (13 Phase 1 + 13 Phase 2).
 >
 > **Decisions locked (see §13):**
 > - **D1 — Telegram auth:** target a **normal browser website** using the **Telegram Login Widget** (server-side verification of Telegram-signed data → existing Postbox JWT → **HttpOnly, Secure, SameSite=Lax cookie** → POST → 303 → GET). No `localStorage`, JWT never exposed to JS. No server-side sessions unless a concrete need appears. Keep the existing JWT create/decode. The currently-disabled signature verification is a **security bug** whose fix gates completion of the auth phase.

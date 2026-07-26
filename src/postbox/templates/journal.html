@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Журнал — Postbox{% endblock %}
+
+{% block content %}
+<section class="journal-screen" aria-labelledby="journal-title">
+  <div class="screen-intro">
+    <p class="eyebrow">Все письма</p>
+    <h2 id="journal-title">Журнал</h2>
+    <p>Хронология отправленных и полученных открыток.</p>
+  </div>
+
+  <nav class="filter-row" aria-label="Фильтры журнала">
+    {% for fid, flabel in filters %}
+    <a
+      class="filter-pill{% if current_filter == fid %} filter-pill--active{% endif %}"
+      href="/?filter={{ fid }}"
+      {% if current_filter == fid %}aria-current="page"{% endif %}
+    >{{ flabel }}</a>
+    {% endfor %}
+  </nav>
+
+  {% if journal.items %}
+  <div class="journal-list">
+    {% for item in journal.items %}
+    <article class="journal-row">
+      <span class="journal-row__icon journal-row__icon--{{ item.direction.value }}" aria-hidden="true">
+        {% if item.direction.value == "incoming" %}
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="17 17 7 17 7 7"/></svg>
+        {% else %}
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+        {% endif %}
+      </span>
+      <div>
+        <h3>{% if item.direction.value == "incoming" %}От {{ item.correspondent.name }}{% else %}Для {{ item.correspondent.name }}{% endif %}</h3>
+        <p>{{ format_status(item) }}</p>
+      </div>
+      <time datetime="{{ item.journal_date.isoformat() }}">{{ format_date(item.journal_date) }}</time>
+    </article>
+    {% endfor %}
+  </div>
+
+  {% if journal.pages > 1 %}
+  <nav class="pagination" aria-label="Страницы журнала">
+    {% if journal.page > 1 %}
+    <a class="pagination__link" href="/?filter={{ current_filter }}&amp;page={{ journal.page - 1 }}">&larr; Назад</a>
+    {% endif %}
+    <span class="pagination__info">{{ journal.page }} / {{ journal.pages }}</span>
+    {% if journal.page < journal.pages %}
+    <a class="pagination__link" href="/?filter={{ current_filter }}&amp;page={{ journal.page + 1 }}">Вперёд &rarr;</a>
+    {% endif %}
+  </nav>
+  {% endif %}
+
+  {% else %}
+  <div class="journal-feedback">
+    <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+    {% if current_filter == "all" %}В журнале пока нет писем.{% else %}Здесь пока нет писем.{% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

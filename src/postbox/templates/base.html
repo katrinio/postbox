@@ -19,8 +19,22 @@
     <link rel="stylesheet" href="/static/css/pages.css" />
   </head>
   <body>
+    {% block body %}
+    <header class="site-header">
+      <a class="site-header__brand" href="/">Postbox</a>
+      {% if user is defined and user %}
+      <nav class="site-header__nav">
+        <span class="site-header__user">{{ user.first_name }}</span>
+        <form method="post" action="/logout" class="site-header__logout">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <button class="ghost-button ghost-button--sm" type="submit">Выйти</button>
+        </form>
+      </nav>
+      {% endif %}
+    </header>
     <main class="prototype-stage">
       <div class="page">{% block content %}{% endblock %}</div>
     </main>
+    {% endblock %}
   </body>
 </html>

@@ -56,7 +56,7 @@ def validate_telegram_signature(data: dict[str, Any], token: str, allow_dev_hash
     secret_key = hashlib.sha256(token.encode()).digest()
     calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
 
-    return calculated_hash == received_hash
+    return hmac.compare_digest(calculated_hash, received_hash)
 
 
 DEFAULT_TELEGRAM_MAX_AGE_SECONDS = 24 * 60 * 60
