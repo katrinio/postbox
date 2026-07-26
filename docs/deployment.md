@@ -5,25 +5,35 @@ This guide covers deploying Postbox to a VPS using Docker Compose and nginx reve
 ## Architecture
 
 ```
-                          ┌─ postbox.finpipe.net (HTTPS)
-                          │  nginx reverse proxy
-                          │
-                ┌─────────┴──────────┬──────────┐
-                │                    │          │
-            /api/*                 /             (static)
-                │                  │
-        ┌───────┴──────┐     ┌─────┴──────┐
-        │ FastAPI      │     │ Vinext     │
-        │ 0.0.0.0:8000 │     │ 0.0.0.0:3000
-        │              │     │            │
-        └──────────────┴─────┴────────────┘
-        
+                    ┌─ postbox.finpipe.net (HTTPS)
+                    │  nginx reverse proxy
+                    │
+                    │  location / → 127.0.0.1:8014
+                    │
+              ┌─────┴──────────────────────┐
+              │  FastAPI + Jinja2           │
+              │  0.0.0.0:8000 (→ host 8014)│
+              │                            │
+              │  ├── /login                │
+              │  ├── /auth/telegram        │
+              │  ├── /logout               │
+              │  ├── / (journal)           │
+              │  ├── /static/...           │
+              │  ├── /api/health           │
+              │  ├── /api/ready            │
+              │  ├── /api/auth/telegram    │
+              │  └── /api/journal          │
+              │                            │
+              │  [vinext on :3000 — idle,  │
+              │   host 8013 — rollback]    │
+              └────────────────────────────┘
+
         Docker container (postbox)
-        
+
         Published ports (from host):
-        - 127.0.0.1:8000  → API (for health checks and debugging)
-        - 127.0.0.1:8013  → Frontend (proxied via nginx)
-        
+        - 127.0.0.1:8014  → FastAPI (primary, proxied via nginx)
+        - 127.0.0.1:8013  → Vinext (rollback only, not proxied)
+
         Persistence:
         - ./data/postbox.db mounted as /data (SQLite)
         - Logs rotated via docker json-file driver
@@ -62,11 +72,17 @@ cat > .env << 'EOF'
 POSTBOX_JWT_SECRET_KEY=replace-with-output-of-openssl-rand-hex-32
 POSTBOX_PUBLIC_URL=https://postbox.finpipe.net
 
+# Telegram Login Widget (REQUIRED for production auth)
+POSTBOX_BOT_TOKEN=replace-with-botfather-token
+POSTBOX_BOT_USERNAME=replace-with-bot-username
+POSTBOX_COOKIE_SECURE=true
+POSTBOX_DEV_LOGIN=false
+
 # Configuration
 POSTBOX_REGISTRATION_LIMIT=5
 POSTBOX_LOG_LEVEL=INFO
 
-# Frontend: leave empty to use relative /api paths (recommended)
+# Legacy frontend (kept for rollback; leave empty)
 NEXT_PUBLIC_POSTBOX_API_URL=
 
 # Uvicorn
@@ -124,17 +140,16 @@ curl -s http://127.0.0.1:8000/api/ready | jq .
 
 ## nginx Configuration
 
-Configure nginx to reverse proxy to the Docker containers.
+Configure nginx to reverse proxy all traffic to the FastAPI application.
+
+After Phase 3, the Python app serves both HTML pages and JSON API endpoints.
+There is no longer a separate frontend upstream.
 
 Example `/etc/nginx/sites-available/postbox.finpipe.net`:
 
 ```nginx
-upstream postbox_api {
-    server 127.0.0.1:8000;
-}
-
-upstream postbox_web {
-    server 127.0.0.1:8013;
+upstream postbox {
+    server 127.0.0.1:8014;
 }
 
 server {
@@ -162,38 +177,15 @@ server {
     add_header X-XSS-Protection "1; mode=block" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
-    # API paths
-    location /api/ {
-        proxy_pass http://postbox_api;
-
-        # Proxy headers
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Connection settings
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-
-        # WebSocket support (if needed)
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-
-    # Frontend paths
+    # All traffic to the Python application
     location / {
-        proxy_pass http://postbox_web;
+        proxy_pass http://postbox;
 
-        # Proxy headers
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # Connection settings
         proxy_connect_timeout 60s;
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
@@ -207,6 +199,42 @@ server {
     }
 }
 ```
+
+### Rollback to vinext frontend
+
+If the server-rendered app has issues, restore the split routing:
+
+```nginx
+upstream postbox_api {
+    server 127.0.0.1:8014;
+}
+
+upstream postbox_web {
+    server 127.0.0.1:8013;
+}
+
+server {
+    # ... same SSL/headers block ...
+
+    location /api/ {
+        proxy_pass http://postbox_api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://postbox_web;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Then: `sudo nginx -t && sudo systemctl reload nginx`. No container rebuild needed.
 
 ### Enable and Test
 
@@ -391,24 +419,32 @@ git reset --hard <commit-hash>
 docker compose up -d
 ```
 
-## Telegram Web App Configuration
+## Telegram Login Widget Configuration
 
-Register your domain with Telegram BotFather:
+Register your domain with Telegram BotFather for the Login Widget:
 
 1. Open Telegram and message [@BotFather](https://t.me/botfather)
 2. Send `/setdomain`
 3. Select your bot
 4. Enter: `postbox.finpipe.net`
 
-Your bot's Telegram Web App will now open at:
+Required environment variables (in `.env`):
+
 ```
-https://t.me/[YOUR_BOT]/app?startapp=...
+POSTBOX_BOT_TOKEN=<token from BotFather>
+POSTBOX_BOT_USERNAME=<bot username without @>
 ```
 
-And authenticate users via:
-```
-POST https://postbox.finpipe.net/api/auth/telegram
-```
+The Login Widget on `/login` will redirect to `/auth/telegram` with signed
+query parameters, which the server verifies cryptographically.
+
+### Production checklist
+
+- `POSTBOX_BOT_TOKEN` is set (non-empty, real token from BotFather)
+- `POSTBOX_BOT_USERNAME` is set (matches the bot)
+- `POSTBOX_COOKIE_SECURE=true` (cookies require HTTPS)
+- `POSTBOX_DEV_LOGIN=false` (no dev bypass in production)
+- Domain `postbox.finpipe.net` registered with BotFather (`/setdomain`)
 
 ## Troubleshooting
 
@@ -421,7 +457,7 @@ docker compose logs postbox
 Check:
 - Is `.env` file present and readable?
 - Is `POSTBOX_JWT_SECRET_KEY` set?
-- Are ports 8000 and 8013 available? (`lsof -i :8000 -i :8013`)
+- Are ports 8014 and 8013 available? (`lsof -i :8014 -i :8013`)
 - Is `/data` directory writable?
 
 ### Health check failing
@@ -441,16 +477,16 @@ Check:
 # Check nginx error log
 sudo tail -f /var/log/nginx/error.log
 
-# Test API directly (bypassing nginx)
-curl -v http://127.0.0.1:8000/api/ready
+# Test FastAPI directly (bypassing nginx)
+curl -v http://127.0.0.1:8014/api/ready
 
-# Test frontend directly (bypassing nginx)
+# Test vinext directly (rollback target)
 curl -v http://127.0.0.1:8013/
 ```
 
 Check:
 - Are containers running? `docker compose ps`
-- Is port 8000 listening? `netstat -an | grep 8000`
+- Is port 8014 listening? `netstat -an | grep 8014`
 - Is port 8013 listening? `netstat -an | grep 8013`
 - Check container logs: `docker compose logs --tail=50 postbox`
 

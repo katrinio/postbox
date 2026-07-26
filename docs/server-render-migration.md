@@ -1,6 +1,14 @@
 # Server-Render Migration Plan
 
-> **Status:** planning only. No migration performed. No Docker/frontend/deployment changes. Source of truth for later implementation sessions.
+> **Status:** Phases 0-3 complete. Ready for production nginx cutover.
+>
+> **Phase 1 (complete):** Jinja2 infrastructure, cookie-based JWT auth, Telegram Login Widget flow, CSRF, `/login`, `/auth/telegram`, `GET /`, `POST /logout`.
+>
+> **Phase 2 (complete):** Legacy `/api/auth/telegram` hardened with `verify_telegram_login`. `GET /` renders real journal with server-side filters. Navigation header.
+>
+> **Phase 3 (complete):** nginx config updated to single FastAPI upstream (`127.0.0.1:8014`). Proxy headers enabled (`proxy_headers=True`, `forwarded_allow_ips="127.0.0.1"`). Telegram env vars added to compose. Deployment docs updated. Vinext kept on host port 8013 as rollback. Rollback: restore split nginx config, reload nginx — no rebuild needed.
+>
+> **Remaining:** Phase 4 (remove Node from Docker image), Phase 5 (delete `web/` and legacy JSON endpoints).
 >
 > **Decisions locked (see §13):**
 > - **D1 — Telegram auth:** target a **normal browser website** using the **Telegram Login Widget** (server-side verification of Telegram-signed data → existing Postbox JWT → **HttpOnly, Secure, SameSite=Lax cookie** → POST → 303 → GET). No `localStorage`, JWT never exposed to JS. No server-side sessions unless a concrete need appears. Keep the existing JWT create/decode. The currently-disabled signature verification is a **security bug** whose fix gates completion of the auth phase.

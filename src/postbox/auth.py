@@ -56,7 +56,45 @@ def validate_telegram_signature(data: dict[str, Any], token: str, allow_dev_hash
     secret_key = hashlib.sha256(token.encode()).digest()
     calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
 
-    return calculated_hash == received_hash
+    return hmac.compare_digest(calculated_hash, received_hash)
+
+
+DEFAULT_TELEGRAM_MAX_AGE_SECONDS = 24 * 60 * 60
+
+
+def verify_telegram_login(
+    data: dict[str, Any],
+    *,
+    bot_token: str,
+    allow_dev_hash: bool = False,
+    max_age_seconds: int = DEFAULT_TELEGRAM_MAX_AGE_SECONDS,
+) -> bool:
+    """Verify a Telegram Login Widget payload: signature first, then freshness.
+
+    ``data`` holds the widget fields including ``hash`` (values are the exact
+    strings Telegram sent). ``bot_token`` is required — the signature cannot be
+    checked without it. ``allow_dev_hash`` must only be enabled in an explicit
+    development mode. Returns True only when the HMAC signature is valid and the
+    ``auth_date`` is recent, rejecting stale/replayed logins.
+    """
+    if not bot_token and not allow_dev_hash:
+        return False
+
+    if not validate_telegram_signature(dict(data), bot_token, allow_dev_hash=allow_dev_hash):
+        return False
+
+    received_hash = str(data.get("hash", ""))
+    if allow_dev_hash and received_hash.startswith("dev_hash_"):
+        return True
+
+    try:
+        auth_date = int(data["auth_date"])
+    except KeyError, TypeError, ValueError:
+        return False
+
+    now = int(datetime.now(UTC).timestamp())
+    # Reject data older than the window; allow small clock skew for future dates.
+    return -300 <= (now - auth_date) <= max_age_seconds
 
 
 def create_jwt_token(

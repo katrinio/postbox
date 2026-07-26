@@ -16,12 +16,13 @@ from postbox.auth import (
     AuthResponse,
     create_jwt_token,
     decode_jwt_token,
-    validate_telegram_signature,
+    verify_telegram_login,
 )
 from postbox.config import WebSettings
 from postbox.database import Database
 from postbox.logging import configure_logging
 from postbox.models import MailDirection, MailItem, MailJournalFilter, MailStatus, User
+from postbox.views import register_web
 
 
 class JournalStatsResponse(BaseModel):
@@ -195,10 +196,13 @@ def create_app(settings: WebSettings | None = None) -> FastAPI:
         session: Annotated[AsyncSession, Depends(database_session)],
     ) -> AuthResponse | AuthErrorResponse:
         """Authenticate user via Telegram Login Widget."""
-        # Validate Telegram signature (dev hashes are allowed for development)
         data_dict = login_data.model_dump()
-        # For development, dev_hash_* is accepted. For production, provide real bot token.
-        if not validate_telegram_signature(data_dict.copy(), "", allow_dev_hash=True):
+        data_dict = {k: str(v) for k, v in data_dict.items() if v is not None}
+        if not verify_telegram_login(
+            data_dict,
+            bot_token=web_settings.bot_token or "",
+            allow_dev_hash=web_settings.dev_login,
+        ):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid Telegram signature",
@@ -274,6 +278,10 @@ def create_app(settings: WebSettings | None = None) -> FastAPI:
             total=journal_page.total,
         )
 
+    # Server-rendered HTML path (Jinja templates + cookie auth), alongside the
+    # legacy JSON API above. Registered last so /api/* keeps priority.
+    register_web(app)
+
     return app
 
 
@@ -284,4 +292,12 @@ def run() -> None:
     port = int(os.getenv("POSTBOX_API_PORT", "8000"))
     reload = os.getenv("POSTBOX_API_RELOAD", "false").lower() == "true"
 
-    uvicorn.run("postbox.api:create_app", factory=True, host=host, port=port, reload=reload)
+    uvicorn.run(
+        "postbox.api:create_app",
+        factory=True,
+        host=host,
+        port=port,
+        reload=reload,
+        proxy_headers=True,
+        forwarded_allow_ips="127.0.0.1",
+    )
