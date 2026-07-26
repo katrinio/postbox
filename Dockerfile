@@ -76,11 +76,6 @@ RUN useradd \
     mkdir -p /data && \
     chown -R postbox:postbox /app /data /opt/venv
 
-# Copy entrypoint
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh && \
-    chown postbox:postbox /usr/local/bin/docker-entrypoint.sh
-
 # Smoke check: verify runtime
 RUN command -v postbox-api && \
     python -c "import postbox"
@@ -96,4 +91,4 @@ HEALTHCHECK \
     --start-period=10s \
     CMD curl --fail --silent http://127.0.0.1:8000/api/ready || exit 1
 
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["postbox-api"]
