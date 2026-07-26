@@ -1,9 +1,4 @@
-"""Server-rendered HTML routes (Jinja2) and cookie-based authentication.
-
-This is the new conventional web path. It coexists with the legacy JSON API
-(`/api/*`) during the migration. Authentication reuses the existing JWT
-(`postbox.auth`) but carries it in an HttpOnly cookie instead of a Bearer header.
-"""
+"""Server-rendered HTML routes (Jinja2) and cookie-based authentication."""
 
 from __future__ import annotations
 
@@ -13,6 +8,7 @@ from collections.abc import AsyncIterator
 from datetime import date
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import quote, unquote
 
 from fastapi import APIRouter, Depends, FastAPI, Form, HTTPException, Request, status
 from fastapi.staticfiles import StaticFiles
@@ -22,7 +18,16 @@ from starlette.responses import RedirectResponse, Response
 
 from postbox.auth import create_jwt_token, decode_jwt_token, verify_telegram_login
 from postbox.config import WebSettings
-from postbox.models import MailDirection, MailItem, MailJournalFilter, MailStatus, User
+from postbox.models import (
+    Correspondent,
+    MailDeliveryError,
+    MailDirection,
+    MailItem,
+    MailJournalFilter,
+    MailNoteError,
+    MailStatus,
+    User,
+)
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 TEMPLATES_DIR = PACKAGE_ROOT / "templates"
@@ -30,10 +35,9 @@ STATIC_DIR = PACKAGE_ROOT / "static"
 
 SESSION_COOKIE = "postbox_session"
 CSRF_COOKIE = "postbox_csrf"
-# Match the JWT lifetime so the cookie and token expire together.
+FLASH_COOKIE = "postbox_flash"
 SESSION_MAX_AGE = 365 * 24 * 60 * 60
 
-# Fixed, non-reflected messages keyed by an `error` code in the URL.
 LOGIN_ERRORS = {
     "signature": "Не удалось проверить вход через Telegram. Попробуйте ещё раз.",
     "limit": "Регистрация временно закрыта. Достигнут лимит пользователей.",
@@ -137,6 +141,25 @@ def _verify_csrf(request: Request, form_token: str) -> None:
     cookie_token = request.cookies.get(CSRF_COOKIE, "")
     if not cookie_token or not hmac.compare_digest(cookie_token, form_token):
         raise HTTPException(status_code=status.HTTP_303_SEE_OTHER, headers={"Location": "/login?error=csrf"})
+
+
+# --- Flash messages (cookie-based, one-shot) ---
+
+
+def _set_flash(response: Response, message: str) -> None:
+    response.set_cookie(FLASH_COOKIE, quote(message), max_age=30, httponly=True, samesite="lax", path="/")
+
+
+def _pop_flash(request: Request, response: Response) -> str | None:
+
+    raw = request.cookies.get(FLASH_COOKIE)
+    if raw:
+        response.delete_cookie(FLASH_COOKIE, path="/")
+        return unquote(raw)
+    return None
+
+
+# --- Auth routes ---
 
 
 @router.get("/login")
@@ -244,6 +267,8 @@ async def logout(request: Request, csrf_token: Annotated[str, Form()]) -> Respon
     return response
 
 
+# --- Journal ---
+
 JOURNAL_FILTERS = [
     ("all", "Все"),
     ("in_transit", "В пути"),
@@ -280,6 +305,8 @@ async def home(
     journal = await MailItem.journal_page(session, user_id, view=view, page=page, page_size=JOURNAL_PAGE_SIZE)
     stats = await MailItem.journal_stats(session, user_id)
     csrf = _csrf_token(request)
+    raw_flash = request.cookies.get(FLASH_COOKIE)
+    flash = unquote(raw_flash) if raw_flash else None
     response = templates.TemplateResponse(
         request,
         "journal.html",
@@ -290,10 +317,280 @@ async def home(
             "filters": JOURNAL_FILTERS,
             "current_filter": view.value,
             "csrf_token": csrf,
+            "flash": flash,
+            "today": date.today(),
+        },
+    )
+    if raw_flash:
+        response.delete_cookie(FLASH_COOKIE, path="/")
+    _set_csrf_cookie(response, csrf, settings)
+    return response
+
+
+# --- Create mail ---
+
+
+@router.get("/mail/new")
+async def new_mail_form(
+    request: Request,
+    user_id: Annotated[int, Depends(current_user_id)],
+    session: Annotated[AsyncSession, Depends(web_session)],
+) -> Response:
+    settings = _settings(request)
+    user = await User.get(session, user_id)
+    if user is None:
+        raise NotAuthenticated
+    correspondents = await Correspondent.for_owner(session, user_id)
+    csrf = _csrf_token(request)
+    response = templates.TemplateResponse(
+        request,
+        "mail_form.html",
+        {
+            "user": user,
+            "csrf_token": csrf,
+            "correspondents": correspondents,
+            "errors": {},
+            "values": {"direction": "outgoing", "correspondent": "", "date": str(date.today()), "note": ""},
+            "today": str(date.today()),
         },
     )
     _set_csrf_cookie(response, csrf, settings)
     return response
+
+
+@router.post("/mail")
+async def create_mail(
+    request: Request,
+    user_id: Annotated[int, Depends(current_user_id)],
+    session: Annotated[AsyncSession, Depends(web_session)],
+    csrf_token: Annotated[str, Form()],
+    direction: Annotated[str, Form()] = "",
+    correspondent: Annotated[str, Form()] = "",
+    mail_date: Annotated[str, Form()] = "",
+    note: Annotated[str, Form()] = "",
+) -> Response:
+    _verify_csrf(request, csrf_token)
+    settings = _settings(request)
+    user = await User.get(session, user_id)
+    if user is None:
+        raise NotAuthenticated
+
+    errors: dict[str, str] = {}
+    correspondent_name = correspondent.strip()
+    if not correspondent_name:
+        errors["correspondent"] = "Укажите имя адресата."
+    if len(correspondent_name) > 160:
+        errors["correspondent"] = "Имя слишком длинное (максимум 160 символов)."
+
+    if direction not in ("outgoing", "incoming"):
+        errors["direction"] = "Выберите направление."
+
+    parsed_date: date | None = None
+    if not mail_date.strip():
+        errors["date"] = "Укажите дату."
+    else:
+        try:
+            parsed_date = date.fromisoformat(mail_date.strip())
+        except ValueError:
+            errors["date"] = "Неверный формат даты."
+        else:
+            if parsed_date > date.today():
+                errors["date"] = "Дата не может быть в будущем."
+
+    note_text = note.strip() or None
+    if note_text:
+        try:
+            from postbox.models import MailItem as _MI
+
+            note_text = _MI.normalize_note(note_text)
+        except MailNoteError as e:
+            errors["note"] = str(e)
+
+    if errors:
+        correspondents = await Correspondent.for_owner(session, user_id)
+        csrf = _csrf_token(request)
+        response = templates.TemplateResponse(
+            request,
+            "mail_form.html",
+            {
+                "user": user,
+                "csrf_token": csrf,
+                "correspondents": correspondents,
+                "errors": errors,
+                "values": {
+                    "direction": direction,
+                    "correspondent": correspondent_name,
+                    "date": mail_date.strip(),
+                    "note": note.strip(),
+                },
+                "today": str(date.today()),
+            },
+            status_code=422,
+        )
+        _set_csrf_cookie(response, csrf, settings)
+        return response
+
+    corr = await Correspondent.find_or_create(session, owner_id=user_id, name=correspondent_name)
+
+    mail_direction = MailDirection(direction)
+    sent_at = parsed_date if mail_direction is MailDirection.OUTGOING else None
+    received_at = parsed_date if mail_direction is MailDirection.INCOMING else None
+
+    await MailItem.create(
+        session,
+        owner_id=user_id,
+        correspondent_id=corr.id,
+        direction=mail_direction,
+        sent_at=sent_at,
+        received_at=received_at,
+        note=note_text,
+    )
+    await session.commit()
+
+    redirect = RedirectResponse("/", status_code=303)
+    _set_flash(redirect, "Письмо добавлено.")
+    return redirect
+
+
+# --- Mail item detail / edit ---
+
+
+async def _load_item(session: AsyncSession, user_id: int, mail_id: int) -> MailItem:
+    item = await MailItem.find_for_owner(session, owner_id=user_id, mail_id=mail_id)
+    if item is None:
+        raise HTTPException(status_code=404)
+    return item
+
+
+@router.get("/mail/{mail_id}")
+async def mail_detail(
+    request: Request,
+    mail_id: int,
+    user_id: Annotated[int, Depends(current_user_id)],
+    session: Annotated[AsyncSession, Depends(web_session)],
+) -> Response:
+    settings = _settings(request)
+    user = await User.get(session, user_id)
+    if user is None:
+        raise NotAuthenticated
+    item = await _load_item(session, user_id, mail_id)
+    csrf = _csrf_token(request)
+    response = templates.TemplateResponse(
+        request,
+        "mail_detail.html",
+        {
+            "user": user,
+            "item": item,
+            "csrf_token": csrf,
+            "today": date.today(),
+        },
+    )
+    _set_csrf_cookie(response, csrf, settings)
+    return response
+
+
+@router.get("/mail/{mail_id}/edit")
+async def edit_note_form(
+    request: Request,
+    mail_id: int,
+    user_id: Annotated[int, Depends(current_user_id)],
+    session: Annotated[AsyncSession, Depends(web_session)],
+) -> Response:
+    settings = _settings(request)
+    user = await User.get(session, user_id)
+    if user is None:
+        raise NotAuthenticated
+    item = await _load_item(session, user_id, mail_id)
+    csrf = _csrf_token(request)
+    response = templates.TemplateResponse(
+        request,
+        "mail_edit.html",
+        {
+            "user": user,
+            "item": item,
+            "csrf_token": csrf,
+            "error": None,
+            "note_value": item.note or "",
+        },
+    )
+    _set_csrf_cookie(response, csrf, settings)
+    return response
+
+
+@router.post("/mail/{mail_id}/note")
+async def update_note(
+    request: Request,
+    mail_id: int,
+    user_id: Annotated[int, Depends(current_user_id)],
+    session: Annotated[AsyncSession, Depends(web_session)],
+    csrf_token: Annotated[str, Form()],
+    note: Annotated[str, Form()] = "",
+) -> Response:
+    _verify_csrf(request, csrf_token)
+    settings = _settings(request)
+    user = await User.get(session, user_id)
+    if user is None:
+        raise NotAuthenticated
+    item = await _load_item(session, user_id, mail_id)
+
+    note_text = note.strip() or None
+    try:
+        await item.set_note(session, note=note_text)
+        await session.commit()
+    except MailNoteError as e:
+        csrf = _csrf_token(request)
+        response = templates.TemplateResponse(
+            request,
+            "mail_edit.html",
+            {
+                "user": user,
+                "item": item,
+                "csrf_token": csrf,
+                "error": str(e),
+                "note_value": note.strip(),
+            },
+            status_code=422,
+        )
+        _set_csrf_cookie(response, csrf, settings)
+        return response
+
+    redirect = RedirectResponse(f"/mail/{mail_id}", status_code=303)
+    _set_flash(redirect, "Заметка сохранена.")
+    return redirect
+
+
+@router.post("/mail/{mail_id}/received")
+async def mark_received(
+    request: Request,
+    mail_id: int,
+    user_id: Annotated[int, Depends(current_user_id)],
+    session: Annotated[AsyncSession, Depends(web_session)],
+    csrf_token: Annotated[str, Form()],
+    received_date: Annotated[str, Form()] = "",
+) -> Response:
+    _verify_csrf(request, csrf_token)
+    user = await User.get(session, user_id)
+    if user is None:
+        raise NotAuthenticated
+    item = await _load_item(session, user_id, mail_id)
+
+    try:
+        recv_at = date.fromisoformat(received_date.strip()) if received_date.strip() else date.today()
+    except ValueError:
+        recv_at = date.today()
+
+    try:
+        await item.mark_received(session, received_at=recv_at)
+        await session.commit()
+    except MailDeliveryError:
+        return RedirectResponse(f"/mail/{mail_id}", status_code=303)
+
+    response = RedirectResponse("/", status_code=303)
+    _set_flash(response, "Отмечено как полученное.")
+    return response
+
+
+# --- Plumbing ---
 
 
 async def _redirect_to_login(request: Request, exc: Exception) -> Response:

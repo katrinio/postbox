@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}{{ item.correspondent.name }} — Postbox{% endblock %}
+
+{% block content %}
+<section class="detail-screen">
+  <a class="back-link" href="/">&larr; Журнал</a>
+
+  <div class="detail-card">
+    <div class="detail-header">
+      <span class="detail-icon detail-icon--{{ item.direction.value }}" aria-hidden="true">
+        {% if item.direction.value == "incoming" %}
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="17 17 7 17 7 7"/></svg>
+        {% else %}
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+        {% endif %}
+      </span>
+      <div>
+        <h1 class="detail-name">{{ item.correspondent.name }}</h1>
+        <p class="detail-direction">{% if item.direction.value == "incoming" %}Входящее письмо{% else %}Исходящее письмо{% endif %}</p>
+      </div>
+    </div>
+
+    <dl class="detail-fields">
+      {% if item.sent_at %}
+      <div class="detail-field">
+        <dt>Отправлено</dt>
+        <dd>{{ format_date(item.sent_at) }}</dd>
+      </div>
+      {% endif %}
+
+      {% if item.received_at %}
+      <div class="detail-field">
+        <dt>Получено</dt>
+        <dd>{{ format_date(item.received_at) }}</dd>
+      </div>
+      {% endif %}
+
+      <div class="detail-field">
+        <dt>Статус</dt>
+        <dd>{{ format_status(item) }}</dd>
+      </div>
+
+      {% if item.travel_days() is not none and item.received_at %}
+      <div class="detail-field">
+        <dt>В пути</dt>
+        <dd>{{ item.travel_days() }} дн.</dd>
+      </div>
+      {% endif %}
+    </dl>
+
+    {% if item.note %}
+    <div class="detail-note">
+      <h2>Заметка</h2>
+      <p>{{ item.note }}</p>
+    </div>
+    {% endif %}
+
+    <div class="detail-actions">
+      <a class="ghost-button" href="/mail/{{ item.id }}/edit">
+        {% if item.note %}Редактировать заметку{% else %}Добавить заметку{% endif %}
+      </a>
+
+      {% if item.direction.value == "outgoing" and item.status.value == "in_transit" %}
+      <form method="post" action="/mail/{{ item.id }}/received" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <input type="hidden" name="received_date" value="{{ today.isoformat() }}" />
+        <button class="primary-button" type="submit">Отметить полученным</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Новое письмо — Postbox{% endblock %}
+
+{% block content %}
+<section class="form-screen">
+  <h1>Новое письмо</h1>
+
+  <form method="post" action="/mail" class="postbox-form" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+    <fieldset class="form-fieldset">
+      <legend class="form-legend">Направление</legend>
+      <div class="radio-group">
+        <label class="radio-label">
+          <input type="radio" name="direction" value="outgoing" {% if values.direction == "outgoing" %}checked{% endif %} />
+          <span>Я отправила</span>
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="direction" value="incoming" {% if values.direction == "incoming" %}checked{% endif %} />
+          <span>Я получила</span>
+        </label>
+      </div>
+      {% if errors.direction %}<p class="field-error">{{ errors.direction }}</p>{% endif %}
+    </fieldset>
+
+    <div class="form-field">
+      <label for="correspondent">Кому / от кого</label>
+      <input
+        type="text"
+        id="correspondent"
+        name="correspondent"
+        value="{{ values.correspondent }}"
+        placeholder="Имя адресата"
+        required
+        autocomplete="off"
+        list="correspondent-list"
+        {% if errors.correspondent %}aria-invalid="true" aria-describedby="err-correspondent"{% endif %}
+      />
+      {% if correspondents %}
+      <datalist id="correspondent-list">
+        {% for c in correspondents %}<option value="{{ c.name }}">{% endfor %}
+      </datalist>
+      {% endif %}
+      {% if errors.correspondent %}<p class="field-error" id="err-correspondent">{{ errors.correspondent }}</p>{% endif %}
+    </div>
+
+    <div class="form-field">
+      <label for="mail_date">Дата</label>
+      <input
+        type="date"
+        id="mail_date"
+        name="mail_date"
+        value="{{ values.date }}"
+        max="{{ today if today is defined else '' }}"
+        required
+        {% if errors.date %}aria-invalid="true" aria-describedby="err-date"{% endif %}
+      />
+      {% if errors.date %}<p class="field-error" id="err-date">{{ errors.date }}</p>{% endif %}
+    </div>
+
+    <div class="form-field">
+      <label for="note">Заметка <span class="field-optional">(необязательно)</span></label>
+      <textarea
+        id="note"
+        name="note"
+        rows="3"
+        placeholder="Что внутри, на каком бланке, для чего..."
+        {% if errors.note %}aria-invalid="true" aria-describedby="err-note"{% endif %}
+      >{{ values.note }}</textarea>
+      {% if errors.note %}<p class="field-error" id="err-note">{{ errors.note }}</p>{% endif %}
+    </div>
+
+    <div class="form-actions">
+      <button class="primary-button" type="submit">Добавить</button>
+      <a class="ghost-button" href="/">Отмена</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

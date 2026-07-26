@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "postbox-dev",
+      "runtimeExecutable": "poetry",
+      "runtimeArgs": ["run", "postbox-api"],
+      "port": 8014,
+      "env": {
+        "POSTBOX_DEV_LOGIN": "1",
+        "POSTBOX_DATABASE_URL": "sqlite+aiosqlite:///dev.db",
+        "POSTBOX_JWT_SECRET_KEY": "dev-secret-key-at-least-32-bytes-long-ok",
+        "POSTBOX_COOKIE_SECURE": "0",
+        "POSTBOX_API_PORT": "8014"
+      }
+    }
+  ]
+}

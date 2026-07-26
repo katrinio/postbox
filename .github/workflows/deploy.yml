@@ -5,46 +5,25 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/**'
-      - 'migrations/**'
-      - 'pyproject.toml'
-      - 'poetry.lock'
-      - 'Dockerfile'
-      - 'docker-compose.yml'
-      - '.github/workflows/deploy.yml'
+      - "src/**"
+      - "migrations/**"
+      - "pyproject.toml"
+      - "poetry.lock"
+      - "Dockerfile"
+      - "docker-entrypoint.sh"
+      - "docker-compose.yml"
+      - ".dockerignore"
+      - ".github/workflows/deploy.yml"
 
 concurrency:
   group: deploy-postbox
   cancel-in-progress: true
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ghcr.io/katrinio/postbox:latest
-            ghcr.io/katrinio/postbox:${{ github.sha }}
-
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -56,28 +35,30 @@ jobs:
           command_timeout: 10m
           script: |
             set -euo pipefail
-            cd ~/projects/postbox
+
+            cd /home/katrin/projects/postbox
 
             git fetch origin main
             git reset --hard origin/main
 
-            test -f .env || { echo "missing .env"; exit 1; }
+            test -f .env || {
+              echo "ERROR: missing .env"
+              exit 1
+            }
 
-            if [ -f data/postbox.db ]; then
-              mkdir -p backups
-              sqlite3 data/postbox.db "VACUUM INTO 'backups/pre-deploy-$(date -u +%Y%m%dT%H%M%SZ).db'" || true
-            fi
-
-            docker compose build
-            docker compose stop --timeout 30 || true
-            docker compose rm -f
-            docker compose up -d
+            docker compose up -d --build --remove-orphans
 
             for i in $(seq 1 30); do
-              curl -sf http://127.0.0.1:8014/api/ready >/dev/null 2>&1 && { docker image prune -f; exit 0; }
+              if curl -fsS http://127.0.0.1:8014/api/ready >/dev/null; then
+                echo "Postbox deployed successfully"
+                docker compose ps
+                exit 0
+              fi
+
               sleep 2
             done
 
-            echo "health check failed"
-            docker compose logs --tail=50
+            echo "ERROR: health check failed"
+            docker compose ps
+            docker compose logs --tail=100
             exit 1

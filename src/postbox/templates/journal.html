@@ -4,11 +4,17 @@
 
 {% block content %}
 <section class="journal-screen" aria-labelledby="journal-title">
-  <div class="screen-intro">
-    <p class="eyebrow">Все письма</p>
-    <h2 id="journal-title">Журнал</h2>
-    <p>Хронология отправленных и полученных открыток.</p>
+  <div class="journal-header">
+    <div>
+      <h1 id="journal-title">Журнал</h1>
+      <p class="journal-subtitle">Хронология отправленных и полученных писем.</p>
+    </div>
+    <a class="primary-button" href="/mail/new">+ Добавить письмо</a>
   </div>
+
+  {% if flash %}
+  <div class="flash-message" role="status">{{ flash }}</div>
+  {% endif %}
 
   <nav class="filter-row" aria-label="Фильтры журнала">
     {% for fid, flabel in filters %}
@@ -16,27 +22,31 @@
       class="filter-pill{% if current_filter == fid %} filter-pill--active{% endif %}"
       href="/?filter={{ fid }}"
       {% if current_filter == fid %}aria-current="page"{% endif %}
-    >{{ flabel }}</a>
+    >{{ flabel }}{% if fid == "all" and stats.total %} <span class="filter-pill__count">{{ stats.total }}</span>{% elif fid == "in_transit" and stats.in_transit %} <span class="filter-pill__count">{{ stats.in_transit }}</span>{% elif fid == "outgoing" and stats.outgoing %} <span class="filter-pill__count">{{ stats.outgoing }}</span>{% elif fid == "incoming" and stats.incoming %} <span class="filter-pill__count">{{ stats.incoming }}</span>{% endif %}</a>
     {% endfor %}
   </nav>
 
   {% if journal.items %}
   <div class="journal-list">
     {% for item in journal.items %}
-    <article class="journal-row">
+    <a class="journal-row" href="/mail/{{ item.id }}">
       <span class="journal-row__icon journal-row__icon--{{ item.direction.value }}" aria-hidden="true">
         {% if item.direction.value == "incoming" %}
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="17 17 7 17 7 7"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="17 17 7 17 7 7"/></svg>
         {% else %}
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
         {% endif %}
       </span>
-      <div>
-        <h3>{% if item.direction.value == "incoming" %}От {{ item.correspondent.name }}{% else %}Для {{ item.correspondent.name }}{% endif %}</h3>
-        <p>{{ format_status(item) }}</p>
+      <div class="journal-row__body">
+        <h3 class="journal-row__name">{{ item.correspondent.name }}</h3>
+        <p class="journal-row__meta">
+          {% if item.direction.value == "incoming" %}Входящее{% else %}Исходящее{% endif %}
+          · {{ format_status(item) }}
+          {% if item.note %}<span class="journal-row__note-indicator" title="Есть заметка">✎</span>{% endif %}
+        </p>
       </div>
-      <time datetime="{{ item.journal_date.isoformat() }}">{{ format_date(item.journal_date) }}</time>
-    </article>
+      <time class="journal-row__date" datetime="{{ item.journal_date.isoformat() }}">{{ format_date(item.journal_date) }}</time>
+    </a>
     {% endfor %}
   </div>
 
@@ -53,9 +63,23 @@
   {% endif %}
 
   {% else %}
-  <div class="journal-feedback">
-    <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
-    {% if current_filter == "all" %}В журнале пока нет писем.{% else %}Здесь пока нет писем.{% endif %}
+
+  <div class="empty-state">
+    <svg class="empty-state__icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+    {% if current_filter == "all" %}
+    <p class="empty-state__title">Журнал пока пуст</p>
+    <p class="empty-state__text">Добавьте первое отправленное или полученное письмо, чтобы начать журнал.</p>
+    <a class="primary-button" href="/mail/new">Добавить письмо</a>
+    {% elif current_filter == "in_transit" %}
+    <p class="empty-state__title">В пути сейчас ничего нет</p>
+    <p class="empty-state__text"><a href="/">Показать все письма</a></p>
+    {% elif current_filter == "outgoing" %}
+    <p class="empty-state__title">Исходящих писем пока нет</p>
+    <p class="empty-state__text"><a href="/">Показать все письма</a></p>
+    {% elif current_filter == "incoming" %}
+    <p class="empty-state__title">Входящих писем пока нет</p>
+    <p class="empty-state__text"><a href="/">Показать все письма</a></p>
+    {% endif %}
   </div>
   {% endif %}
 </section>

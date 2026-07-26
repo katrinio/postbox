@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Заметка — {{ item.correspondent.name }} — Postbox{% endblock %}
+
+{% block content %}
+<section class="form-screen">
+  <a class="back-link" href="/mail/{{ item.id }}">&larr; Назад</a>
+
+  <h1>{% if item.note %}Редактировать заметку{% else %}Добавить заметку{% endif %}</h1>
+  <p class="form-context">{{ item.correspondent.name }} · {% if item.direction.value == "incoming" %}входящее{% else %}исходящее{% endif %}</p>
+
+  <form method="post" action="/mail/{{ item.id }}/note" class="postbox-form" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+    <div class="form-field">
+      <label for="note">Заметка</label>
+      <textarea
+        id="note"
+        name="note"
+        rows="5"
+        placeholder="Что внутри, на каком бланке, для чего..."
+        {% if error %}aria-invalid="true" aria-describedby="err-note"{% endif %}
+      >{{ note_value }}</textarea>
+      {% if error %}<p class="field-error" id="err-note">{{ error }}</p>{% endif %}
+    </div>
+
+    <div class="form-actions">
+      <button class="primary-button" type="submit">Сохранить</button>
+      <a class="ghost-button" href="/mail/{{ item.id }}">Отмена</a>
+    </div>
+  </form>
+</section>
+{% endblock %}
