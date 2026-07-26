@@ -49,7 +49,6 @@ production: postbox-api runs directly
 | `/opt/venv` | Virtual environment with installed wheel | Built in Docker |
 | `/app/migrations` | Database migrations | Copied from repo |
 | `/app/alembic.ini` | Alembic configuration | Copied from repo |
-| `/app/web/` | Frontend (Node.js) | Copied from frontend builder |
 | `/app/data/` (runtime) | SQLite database | Created at runtime |
 
 **NOT in runtime**:

@@ -1,7 +1,7 @@
 # Storage
 
-Postbox stores each user's private mail journal in PostgreSQL. The bot process
-does not keep durable state on its local filesystem.
+Postbox stores each user's private mail journal in SQLite. Production uses a
+single file database mounted at `/data/postbox.db` inside the Docker container.
 
 ## Records
 
@@ -24,11 +24,11 @@ prevents a mail item from referring to another user's correspondent.
 PostgreSQL are supported and both require an async driver: use
 `sqlite+aiosqlite://` for SQLite or `postgresql+psycopg://` for PostgreSQL. A
 synchronous `sqlite://` URL is rejected at startup with a configuration error.
-For PostgreSQL, production should use a dedicated database and role with only the
-permissions Postbox needs.
 
-## Migrations and backups
+## Schema and backups
 
-Alembic owns schema changes. Run `poetry run alembic upgrade head` during a
-release, before restarting the bot. PostgreSQL backups are managed outside the
-application and should be tested by restoring them into a separate database.
+Tables are auto-created at startup via `Base.metadata.create_all`. Alembic
+migrations are available for schema changes (`poetry run alembic upgrade head`).
+
+SQLite backups use atomic `VACUUM INTO` via `scripts/backup_sqlite.sh`.
+See [deployment guide](deployment.md) for backup schedule and restore procedure.

@@ -37,7 +37,8 @@ Then open http://localhost:8000/login
 
 ## Documentation
 
-- [Deployment Guide](docs/deployment.md) — production setup with Docker and nginx
-- [MVP](docs/mvp.md)
-- [Roadmap](docs/roadmap.md)
+- [Deployment](docs/deployment.md) — production setup with Docker and nginx
+- [Development](docs/development.md) — local setup and checks
+- [Python packaging](docs/python-packaging.md) — wheel-based build flow
 - [Visual direction](docs/design.md)
+- [Contributing](docs/contributing.md)
