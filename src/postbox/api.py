@@ -292,4 +292,12 @@ def run() -> None:
     port = int(os.getenv("POSTBOX_API_PORT", "8000"))
     reload = os.getenv("POSTBOX_API_RELOAD", "false").lower() == "true"
 
-    uvicorn.run("postbox.api:create_app", factory=True, host=host, port=port, reload=reload)
+    uvicorn.run(
+        "postbox.api:create_app",
+        factory=True,
+        host=host,
+        port=port,
+        reload=reload,
+        proxy_headers=True,
+        forwarded_allow_ips="127.0.0.1",
+    )

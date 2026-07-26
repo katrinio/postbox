@@ -1,4 +1,4 @@
-"""Behavior tests for the server-rendered HTML path (Phases 1-2)."""
+"""Behavior tests for the server-rendered HTML path (Phases 1-3)."""
 
 from __future__ import annotations
 
@@ -432,3 +432,43 @@ async def test_journal_shows_navigation(tmp_path) -> None:
     assert "Postbox" in response.text
     assert "Выйти" in response.text
     assert "Nav" in response.text
+
+
+# --- Phase 3: routing / proxy ------------------------------------------------
+
+
+async def test_all_routes_served_by_single_app(tmp_path) -> None:
+    """All production routes are served by the FastAPI app (no vinext dependency)."""
+    async with app_client(build_settings(tmp_path)) as client:
+        login = await client.get("/login")
+        assert login.status_code == 200
+
+        static = await client.get("/static/css/app.css")
+        assert static.status_code == 200
+
+        health = await client.get("/api/health")
+        assert health.status_code == 200
+        assert health.json() == {"status": "ok"}
+
+        ready = await client.get("/api/ready")
+        assert ready.status_code == 200
+
+        root = await client.get("/")
+        assert root.status_code == 303
+        assert root.headers["location"] == "/login"
+
+
+async def test_forwarded_proto_header_respected(tmp_path) -> None:
+    """When X-Forwarded-Proto is set, redirects should use the forwarded scheme."""
+    async with app_client(build_settings(tmp_path)) as client:
+        response = await client.get("/", headers={"x-forwarded-proto": "https"})
+    assert response.status_code == 303
+    location = response.headers["location"]
+    assert location == "/login" or location.startswith("https://")
+
+
+async def test_static_pages_css_served(tmp_path) -> None:
+    async with app_client(build_settings(tmp_path)) as client:
+        response = await client.get("/static/css/pages.css")
+    assert response.status_code == 200
+    assert "site-header" in response.text
