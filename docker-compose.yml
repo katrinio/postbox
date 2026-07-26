@@ -3,7 +3,6 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8013:3000"
       - "127.0.0.1:8014:8000"
     environment:
       POSTBOX_DATABASE_URL: sqlite+aiosqlite:////data/postbox.db
@@ -15,7 +14,6 @@ services:
       POSTBOX_BOT_USERNAME: ${POSTBOX_BOT_USERNAME:-}
       POSTBOX_COOKIE_SECURE: ${POSTBOX_COOKIE_SECURE:-true}
       POSTBOX_DEV_LOGIN: ${POSTBOX_DEV_LOGIN:-false}
-      NEXT_PUBLIC_POSTBOX_API_URL: ${NEXT_PUBLIC_POSTBOX_API_URL:-}
       POSTBOX_API_HOST: 0.0.0.0
       POSTBOX_API_RELOAD: "false"
     volumes:

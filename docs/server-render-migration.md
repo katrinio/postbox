@@ -1,14 +1,16 @@
 # Server-Render Migration Plan
 
-> **Status:** Phases 0-3 complete. Ready for production nginx cutover.
+> **Status:** Phases 0-4 complete. Production runs a single Python process. `web/` remains in the repository for Phase 5 cleanup.
 >
 > **Phase 1 (complete):** Jinja2 infrastructure, cookie-based JWT auth, Telegram Login Widget flow, CSRF, `/login`, `/auth/telegram`, `GET /`, `POST /logout`.
 >
 > **Phase 2 (complete):** Legacy `/api/auth/telegram` hardened with `verify_telegram_login`. `GET /` renders real journal with server-side filters. Navigation header.
 >
-> **Phase 3 (complete):** nginx config updated to single FastAPI upstream (`127.0.0.1:8014`). Proxy headers enabled (`proxy_headers=True`, `forwarded_allow_ips="127.0.0.1"`). Telegram env vars added to compose. Deployment docs updated. Vinext kept on host port 8013 as rollback. Rollback: restore split nginx config, reload nginx — no rebuild needed.
+> **Phase 3 (complete):** nginx single upstream (`127.0.0.1:8014`). Proxy headers. Deployment docs updated.
 >
-> **Remaining:** Phase 4 (remove Node from Docker image), Phase 5 (delete `web/` and legacy JSON endpoints).
+> **Phase 4 (complete):** Node/npm/vinext removed from Docker image. Single-process entrypoint (`exec postbox-api`). Compose exposes only `127.0.0.1:8014:8000`. No port 8013. Healthcheck: Python-only `/api/ready`. Rollback model: deploy previous image tag (no instant nginx-only rollback). `web/` excluded from build context via `.dockerignore`.
+>
+> **Remaining:** Phase 5 (delete `web/`, remove legacy JSON endpoints `/api/auth/telegram` and `/api/journal`, remove Bearer auth, remove CORS middleware).
 >
 > **Decisions locked (see §13):**
 > - **D1 — Telegram auth:** target a **normal browser website** using the **Telegram Login Widget** (server-side verification of Telegram-signed data → existing Postbox JWT → **HttpOnly, Secure, SameSite=Lax cookie** → POST → 303 → GET). No `localStorage`, JWT never exposed to JS. No server-side sessions unless a concrete need appears. Keep the existing JWT create/decode. The currently-disabled signature verification is a **security bug** whose fix gates completion of the auth phase.
