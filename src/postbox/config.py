@@ -64,6 +64,9 @@ class WebSettings:
     # Dev login: when true, a password-less dev login form is accepted. Off by
     # default so production never bypasses Telegram signature verification.
     dev_login: bool = False
+    # Hub Bot integration: shared secret for verifying Hub JWT tokens.
+    # If absent, Hub authentication is disabled.
+    hub_auth_secret: str | None = None
 
     DATABASE_URL_VARIABLE: ClassVar[str] = "POSTBOX_DATABASE_URL"
     JWT_SECRET_KEY_VARIABLE: ClassVar[str] = "POSTBOX_JWT_SECRET_KEY"
@@ -73,6 +76,7 @@ class WebSettings:
     BOT_USERNAME_VARIABLE: ClassVar[str] = "POSTBOX_BOT_USERNAME"
     COOKIE_SECURE_VARIABLE: ClassVar[str] = "POSTBOX_COOKIE_SECURE"
     DEV_LOGIN_VARIABLE: ClassVar[str] = "POSTBOX_DEV_LOGIN"
+    HUB_AUTH_SECRET_VARIABLE: ClassVar[str] = "HUB_AUTH_SECRET"
 
     @classmethod
     def from_env(cls, env_file: str | Path = ".env") -> WebSettings:
@@ -104,4 +108,5 @@ class WebSettings:
             bot_username=os.getenv(cls.BOT_USERNAME_VARIABLE, "").strip() or None,
             cookie_secure=_env_bool(cls.COOKIE_SECURE_VARIABLE, default=True),
             dev_login=_env_bool(cls.DEV_LOGIN_VARIABLE, default=False),
+            hub_auth_secret=os.getenv(cls.HUB_AUTH_SECRET_VARIABLE, "").strip() or None,
         )

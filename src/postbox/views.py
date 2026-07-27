@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import logging
 import secrets
 from collections.abc import AsyncIterator
 from datetime import date
@@ -16,7 +17,8 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import RedirectResponse, Response
 
-from postbox.auth import create_jwt_token, decode_jwt_token, verify_telegram_login
+from postbox.auth import create_jwt_token, decode_jwt_token, verify_hub_token, verify_telegram_login
+from postbox.auth.hub import HubAuthError
 from postbox.config import WebSettings
 from postbox.models import (
     Correspondent,
@@ -30,6 +32,8 @@ from postbox.models import (
     MailStatus,
     User,
 )
+
+logger = logging.getLogger(__name__)
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 TEMPLATES_DIR = PACKAGE_ROOT / "templates"
@@ -45,6 +49,7 @@ LOGIN_ERRORS = {
     "limit": "Регистрация временно закрыта. Достигнут лимит пользователей.",
     "unconfigured": "Вход через Telegram ещё не настроен на этом сервере.",
     "csrf": "Сессия устарела. Обновите страницу и попробуйте снова.",
+    "hub_auth": "Ссылка для входа недействительна или устарела. Вернись в The Hub и открой Postbox снова.",
 }
 
 _DATE_MONTHS = [
@@ -319,6 +324,66 @@ async def telegram_callback(
         last_name=data.get("last_name") or None,
         language_code=data.get("language_code") or None,
     )
+
+
+@router.get("/auth/hub")
+async def hub_auth_callback(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(web_session)],
+    token: str = "",
+) -> Response:
+    """The Hub Bot authentication handoff (GET, signed JWT in query).
+
+    The Hub Bot issues a short-lived JWT that authorizes the user's Telegram identity.
+    This endpoint verifies the JWT and creates a Postbox session.
+    """
+    settings = _settings(request)
+    if not settings.hub_auth_secret:
+        logger.warning("Hub auth attempted but HUB_AUTH_SECRET is not configured")
+        return RedirectResponse("/login?error=hub_auth", status_code=303)
+
+    if not token or not token.strip():
+        logger.debug("Hub auth: token is missing or empty")
+        return RedirectResponse("/login?error=hub_auth", status_code=303)
+
+    try:
+        identity = verify_hub_token(token, settings.hub_auth_secret)
+    except HubAuthError as e:
+        logger.warning("Hub auth verification failed: %s", type(e).__name__)
+        return RedirectResponse("/login?error=hub_auth", status_code=303)
+
+    # Find or create Postbox user from Hub identity.
+    # Hub only provides telegram_user_id (already verified by Telegram).
+    user = await User.find_by_telegram_id(session, identity.telegram_user_id)
+    if user is None:
+        # New user: create with minimal defaults
+        user = await User.create(
+            session,
+            telegram_id=identity.telegram_user_id,
+            username=None,
+            first_name="Telegram User",
+            last_name=None,
+            language_code=None,
+            approved_at=None,
+        )
+        logger.info("Hub auth: created new user for telegram_id=%d", identity.telegram_user_id)
+    else:
+        # Existing user: do not overwrite metadata; just use as-is
+        logger.debug("Hub auth: existing user telegram_id=%d", identity.telegram_user_id)
+
+    # Apply registration limit policy (same as Telegram auth)
+    if not await user.approve_within_limit(session, limit=settings.registration_limit):
+        logger.info("Hub auth: registration limit reached for telegram_id=%d", identity.telegram_user_id)
+        await session.commit()  # Persist the user for manual approval later
+        return RedirectResponse("/login?error=limit", status_code=303)
+
+    await session.commit()
+    token_jwt = create_jwt_token(user.id, user.telegram_id, settings.jwt_secret_key)
+    response = RedirectResponse("/", status_code=303)
+    # Set Referrer-Policy to prevent token leakage in Referer header
+    response.headers["Referrer-Policy"] = "no-referrer"
+    _set_session_cookie(response, token_jwt, settings)
+    return response
 
 
 @router.post("/login")
