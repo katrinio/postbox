@@ -59,6 +59,9 @@ def verify_telegram_login(
     checked without it. ``allow_dev_hash`` must only be enabled in an explicit
     development mode. Returns True only when the HMAC signature is valid and the
     ``auth_date`` is recent, rejecting stale/replayed logins.
+
+    NOTE: Do not log the full ``data`` or ``bot_token`` — they contain sensitive information.
+    Only log success/failure, not payload details.
     """
     if not bot_token and not allow_dev_hash:
         return False

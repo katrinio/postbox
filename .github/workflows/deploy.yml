@@ -46,6 +46,10 @@ jobs:
               exit 1
             }
 
+            echo "🔍 Validating production configuration..."
+            source .env
+            bash scripts/validate-production-config.sh
+
             docker compose up -d --build --remove-orphans
 
             for i in $(seq 1 30); do
