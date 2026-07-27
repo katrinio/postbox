@@ -2,12 +2,14 @@
 
 ## Trust Model
 
-Postbox authenticates users through Telegram. The authentication chain is:
+Postbox authenticates users through The Hub Bot. The authentication chain is:
 
 ```
-Telegram account
-    ↓ (cryptographic verification)
-The Hub identity (telegram_id)
+Telegram account (verified by The Hub Bot)
+    ↓ (Hub Bot creates signed JWT)
+The Hub Bot issues JWT with telegram_id
+    ↓ (Postbox verifies Hub JWT signature)
+Postbox extracts and validates telegram_id
     ↓ (local session creation)
 Postbox application session (JWT in HttpOnly cookie)
     ↓ (authorization checks)
@@ -16,31 +18,34 @@ User data (ownership validation)
 
 ### Components
 
-1. **Telegram cryptographic verification** — server validates HMAC signature of Telegram data
-2. **HTTPS only** — all authentication happens over encrypted connections
-3. **Application session** — stateless JWT stored in secure HttpOnly cookie
-4. **CSRF protection** — double-submit cookie for state-changing requests
-5. **Ownership checks** — every query validates user owns the requested data
+1. **Hub JWT verification** — server validates HMAC signature of Hub token with shared secret
+2. **Telegram identity** — extracted from verified Hub JWT (not self-reported)
+3. **HTTPS only** — all authentication happens over encrypted connections
+4. **Application session** — stateless JWT stored in secure HttpOnly cookie
+5. **CSRF protection** — double-submit cookie for state-changing requests
+6. **Ownership checks** — every query validates user owns the requested data
 
 ---
 
-## 1. Telegram Authentication
+## 1. Hub Bot Authentication
 
 ### How it works
 
-1. User clicks "Login with Telegram"
-2. Telegram app/web opens and asks permission
-3. User confirms
-4. Browser redirects to `/auth/telegram?id=...&hash=...&auth_date=...&...`
-5. Server verifies HMAC signature with `bot_token`
-6. Server checks `auth_date` is recent (within 24 hours)
-7. If valid, create local JWT session
+1. User opens The Hub Bot
+2. User clicks "Postbox" button
+3. The Hub Bot creates a signed JWT with user's `telegram_id`
+4. The Hub Bot generates auth URL: `/auth/hub?token=<JWT>`
+5. User opens URL (or clicks link)
+6. Postbox receives JWT and verifies signature with `HUB_AUTH_SECRET`
+7. Postbox extracts `telegram_id` from verified token
+8. Postbox creates local JWT session
 
 ### Security properties
 
-- **Signature verification**: `hmac.compare_digest()` prevents timing attacks
-- **Bot token secret**: Never sent to client; server-only
-- **Auth date validation**: Rejects replayed/stale logins
+- **Signature verification**: HS256 HMAC prevents tampering
+- **Shared secret**: `HUB_AUTH_SECRET` never exposed to client
+- **Short-lived**: Hub JWT expires after 5 minutes (reduces replay window)
+- **Telegram-verified identity**: Hub Bot already verified user via Telegram
 - **No dev bypass in production**: `POSTBOX_DEV_LOGIN=false` enforced
 
 ### Configuration
@@ -48,14 +53,14 @@ User data (ownership validation)
 Required environment variables:
 
 ```bash
-POSTBOX_BOT_TOKEN=123456789:ABCDEFGHIJKLMNOP  # From BotFather
-POSTBOX_BOT_USERNAME=@my_postbox_bot           # Bot username
-POSTBOX_PUBLIC_URL=https://postbox.example.com # For bot domain
+HUB_AUTH_SECRET=<shared-secret-with-hub-bot>  # Must match The Hub Bot
+POSTBOX_JWT_SECRET_KEY=<strong-random-secret> # For session JWT
+POSTBOX_PUBLIC_URL=https://postbox.example.com
 ```
 
 ### Dev bypass (development only)
 
-When `POSTBOX_DEV_LOGIN=true`, a test form accepts `telegram_id + first_name` without Telegram.
+When `POSTBOX_DEV_LOGIN=true`, a test form accepts `telegram_id + first_name` without Hub Bot.
 
 **This must be `false` in production.**
 
@@ -200,8 +205,7 @@ Provide secrets via environment variables (Docker secrets, CI/CD provider, etc):
 
 ```bash
 export POSTBOX_JWT_SECRET_KEY="$(openssl rand -hex 32)"
-export POSTBOX_BOT_TOKEN="123456789:ABCDEFGHIJKLMNOP"
-export POSTBOX_BOT_USERNAME="@my_bot"
+export HUB_AUTH_SECRET="<shared-secret-with-the-hub-bot>"
 export POSTBOX_PUBLIC_URL="https://postbox.example.com"
 ```
 
@@ -209,8 +213,8 @@ export POSTBOX_PUBLIC_URL="https://postbox.example.com"
 
 Never log:
 
-- JWT tokens
-- Bot token
+- JWT tokens (Postbox session JWT)
+- Hub auth secret
 - CSRF tokens
 - Telegram auth payload (only log success/failure)
 - Passwords (if added)

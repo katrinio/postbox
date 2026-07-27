@@ -17,7 +17,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import RedirectResponse, Response
 
-from postbox.auth import create_jwt_token, decode_jwt_token, verify_hub_token, verify_telegram_login
+from postbox.auth import create_jwt_token, decode_jwt_token, verify_hub_token
 from postbox.auth.hub import HubAuthError
 from postbox.config import WebSettings
 from postbox.models import (
@@ -291,7 +291,6 @@ async def login_page(request: Request) -> Response:
         request,
         "login.html",
         {
-            "bot_username": settings.bot_username,
             "dev_login": settings.dev_login,
             "csrf_token": csrf,
             "error": LOGIN_ERRORS.get(code) if code else None,
@@ -299,31 +298,6 @@ async def login_page(request: Request) -> Response:
     )
     _set_csrf_cookie(response, csrf, settings)
     return response
-
-
-@router.get("/auth/telegram")
-async def telegram_callback(
-    request: Request,
-    session: Annotated[AsyncSession, Depends(web_session)],
-) -> Response:
-    """Telegram Login Widget redirect callback (GET, signed query parameters)."""
-    settings = _settings(request)
-    data = dict(request.query_params)
-    if "hash" not in data or "id" not in data or "first_name" not in data:
-        return RedirectResponse("/login?error=signature", status_code=303)
-    if not settings.bot_token and not settings.dev_login:
-        return RedirectResponse("/login?error=unconfigured", status_code=303)
-    if not verify_telegram_login(data, bot_token=settings.bot_token or "", allow_dev_hash=settings.dev_login):
-        return RedirectResponse("/login?error=signature", status_code=303)
-    return await _login_user(
-        session,
-        settings,
-        telegram_id=int(data["id"]),
-        first_name=data["first_name"],
-        username=data.get("username") or None,
-        last_name=data.get("last_name") or None,
-        language_code=data.get("language_code") or None,
-    )
 
 
 @router.get("/auth/hub")

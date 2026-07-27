@@ -25,16 +25,9 @@ else
     echo "✅ JWT_SECRET_KEY is set and long enough"
 fi
 
-# Check: BOT_TOKEN must be set if bot features are used
-if [[ -z "${POSTBOX_BOT_TOKEN:-}" ]]; then
-    echo "⚠️  WARNING: POSTBOX_BOT_TOKEN not set (Telegram login will show 'not configured')"
-else
-    echo "✅ BOT_TOKEN is set"
-fi
-
 # Check: PUBLIC_URL must be set
 if [[ -z "${POSTBOX_PUBLIC_URL:-}" ]]; then
-    echo "⚠️  WARNING: POSTBOX_PUBLIC_URL not set (may affect Telegram bot domain)"
+    echo "⚠️  WARNING: POSTBOX_PUBLIC_URL not set"
 else
     echo "✅ PUBLIC_URL is set to ${POSTBOX_PUBLIC_URL}"
 fi

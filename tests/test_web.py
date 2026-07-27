@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import time
 from contextlib import asynccontextmanager
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
+from urllib.parse import urlencode
 
 import httpx
+import jwt
 
 from postbox.api import create_app
 from postbox.auth import decode_jwt_token
 from postbox.config import WebSettings
 from postbox.models import Correspondent, MailDirection, MailItem
 
-BOT_TOKEN = "test-bot-token:AAA"
+HUB_AUTH_SECRET = "test-hub-secret-at-least-32-bytes-long"
 JWT_SECRET = "test-jwt-secret-key-at-least-32-bytes-long"
 
 
@@ -24,8 +23,7 @@ def build_settings(tmp_path, **overrides) -> WebSettings:
         database_url=f"sqlite+aiosqlite:///{tmp_path / 'web.db'}",
         jwt_secret_key=JWT_SECRET,
         registration_limit=5,
-        bot_token=BOT_TOKEN,
-        bot_username="postbox_bot",
+        hub_auth_secret=HUB_AUTH_SECRET,
         cookie_secure=False,
         dev_login=False,
     )
@@ -33,14 +31,18 @@ def build_settings(tmp_path, **overrides) -> WebSettings:
     return WebSettings(**defaults)
 
 
-def signed_login(bot_token: str = BOT_TOKEN, *, auth_date: int | None = None, **fields) -> dict[str, str]:
-    """Build a Telegram Login Widget payload with a valid HMAC signature."""
-    payload = {k: str(v) for k, v in fields.items()}
-    payload["auth_date"] = str(auth_date if auth_date is not None else int(time.time()))
-    check = "\n".join(f"{k}={payload[k]}" for k in sorted(payload))
-    secret = hashlib.sha256(bot_token.encode()).digest()
-    payload["hash"] = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
-    return payload
+def create_hub_auth_url(telegram_id: int, secret: str = HUB_AUTH_SECRET) -> str:
+    """Create a Hub Bot auth URL with a valid JWT token."""
+    now = datetime.now(UTC)
+    payload = {
+        "sub": str(telegram_id),
+        "aud": "postbox",
+        "iss": "the-hub-bot",
+        "iat": now,
+        "exp": now + timedelta(minutes=5),
+    }
+    token = jwt.encode(payload, secret, algorithm="HS256")
+    return f"/auth/hub?{urlencode({'token': token})}"
 
 
 @asynccontextmanager
@@ -52,9 +54,10 @@ async def app_client(settings: WebSettings):
             yield client
 
 
-async def _login(client: httpx.AsyncClient, *, telegram_id: int = 1, first_name: str = "Katrin") -> None:
-    """Log in and store the session cookie on the client."""
-    login = await client.get("/auth/telegram", params=signed_login(id=telegram_id, first_name=first_name))
+async def _login(client: httpx.AsyncClient, *, telegram_id: int = 1, first_name: str | None = None) -> None:
+    """Log in via Hub Bot auth and store the session cookie on the client."""
+    auth_url = create_hub_auth_url(telegram_id)
+    login = await client.get(auth_url)
     client.cookies.update(login.cookies)
 
 
@@ -96,7 +99,7 @@ async def test_get_login_returns_html(tmp_path) -> None:
         response = await client.get("/login")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
-    assert "telegram-widget.js" in response.text
+    assert "The Hub" in response.text
 
 
 async def test_static_css_is_served(tmp_path) -> None:
@@ -116,55 +119,16 @@ async def test_unauthenticated_home_redirects_to_login(tmp_path) -> None:
 # --- Authentication -----------------------------------------------------------
 
 
-async def test_valid_telegram_login_sets_httponly_cookie_and_redirects(tmp_path) -> None:
-    async with app_client(build_settings(tmp_path)) as client:
-        response = await client.get("/auth/telegram", params=signed_login(id=1, first_name="Ada"))
-    assert response.status_code == 303
-    assert response.headers["location"] == "/"
-    cookie = response.headers["set-cookie"]
-    assert cookie.startswith("postbox_session=")
-    assert "HttpOnly" in cookie
-    assert "samesite=lax" in cookie.lower()
-
-
-async def test_production_cookie_is_secure(tmp_path) -> None:
-    async with app_client(build_settings(tmp_path, cookie_secure=True)) as client:
-        response = await client.get("/auth/telegram", params=signed_login(id=2, first_name="Grace"))
-    cookie = response.headers["set-cookie"]
-    assert "Secure" in cookie
-    assert "samesite=lax" in cookie.lower()
-    assert "HttpOnly" in cookie
-
-
-async def test_invalid_signature_is_rejected(tmp_path) -> None:
-    bad = signed_login(id=3, first_name="Mallory")
-    bad["hash"] = "0" * 64
-    async with app_client(build_settings(tmp_path)) as client:
-        response = await client.get("/auth/telegram", params=bad)
-    assert response.status_code == 303
-    assert response.headers["location"] == "/login?error=signature"
-    assert "set-cookie" not in response.headers
-
-
-async def test_stale_auth_date_is_rejected(tmp_path) -> None:
-    stale = signed_login(id=4, first_name="Old", auth_date=int(time.time()) - 7 * 24 * 3600)
-    async with app_client(build_settings(tmp_path)) as client:
-        response = await client.get("/auth/telegram", params=stale)
-    assert response.status_code == 303
-    assert response.headers["location"] == "/login?error=signature"
-
-
 async def test_authenticated_home_succeeds(tmp_path) -> None:
     async with app_client(build_settings(tmp_path)) as client:
-        await _login(client, telegram_id=5, first_name="Katrin")
+        await _login(client, telegram_id=5)
         home = await client.get("/")
     assert home.status_code == 200
-    assert "Katrin" in home.text
 
 
 async def test_logout_clears_cookie(tmp_path) -> None:
     async with app_client(build_settings(tmp_path)) as client:
-        await _login(client, telegram_id=6, first_name="Bye")
+        await _login(client, telegram_id=6)
         await client.get("/")
         csrf = client.cookies.get("postbox_csrf")
         response = await client.post("/logout", data={"csrf_token": csrf})
@@ -177,51 +141,11 @@ async def test_logout_clears_cookie(tmp_path) -> None:
 
 async def test_logout_without_csrf_is_rejected(tmp_path) -> None:
     async with app_client(build_settings(tmp_path)) as client:
-        await _login(client, telegram_id=7, first_name="NoCsrf")
+        await _login(client, telegram_id=7)
         await client.get("/")
         response = await client.post("/logout", data={"csrf_token": "wrong-token"})
     assert response.status_code == 303
     assert response.headers["location"] == "/login?error=csrf"
-
-
-# --- Telegram auth security ---------------------------------------------------
-
-
-async def test_dev_hash_rejected_when_not_allowed(tmp_path) -> None:
-    bad = {"id": 999, "first_name": "Hacker", "hash": "dev_hash_bypass"}
-    async with app_client(build_settings(tmp_path, dev_login=False)) as client:
-        response = await client.get("/auth/telegram", params=bad)
-    assert response.status_code == 303
-    assert response.headers["location"] == "/login?error=signature"
-
-
-async def test_tampered_telegram_payload_rejected(tmp_path) -> None:
-    payload = signed_login(id=100, first_name="Alice")
-    payload["first_name"] = "Mallory"
-    async with app_client(build_settings(tmp_path)) as client:
-        response = await client.get("/auth/telegram", params=payload)
-    assert response.status_code == 303
-    assert response.headers["location"] == "/login?error=signature"
-
-
-async def test_stale_telegram_auth_date_rejected(tmp_path) -> None:
-    import time
-
-    stale = signed_login(id=101, first_name="Old", auth_date=int(time.time()) - 25 * 24 * 3600)
-    async with app_client(build_settings(tmp_path)) as client:
-        response = await client.get("/auth/telegram", params=stale)
-    assert response.status_code == 303
-    assert response.headers["location"] == "/login?error=signature"
-
-
-async def test_future_telegram_auth_date_accepted_with_skew(tmp_path) -> None:
-    import time
-
-    future_but_ok = signed_login(id=102, first_name="Future", auth_date=int(time.time()) + 60)
-    async with app_client(build_settings(tmp_path)) as client:
-        response = await client.get("/auth/telegram", params=future_but_ok)
-    assert response.status_code == 303
-    assert response.headers["location"] == "/"
 
 
 # --- Existing behavior preserved ----------------------------------------------
@@ -289,10 +213,10 @@ async def test_health_and_ready_still_json(tmp_path) -> None:
 async def test_registration_limit_is_preserved(tmp_path) -> None:
     settings = build_settings(tmp_path, registration_limit=1)
     async with app_client(settings) as client:
-        first = await client.get("/auth/telegram", params=signed_login(id=100, first_name="First"))
+        first = await client.get(create_hub_auth_url(100))
         assert first.status_code == 303
         assert first.headers["location"] == "/"
-        second = await client.get("/auth/telegram", params=signed_login(id=200, first_name="Second"))
+        second = await client.get(create_hub_auth_url(200))
     assert second.status_code == 303
     assert second.headers["location"] == "/login?error=limit"
 
@@ -311,7 +235,7 @@ async def test_legacy_api_auth_removed(tmp_path) -> None:
     async with app_client(build_settings(tmp_path)) as client:
         response = await client.post(
             "/api/auth/telegram",
-            json={"id": 1, "first_name": "X", "auth_date": int(time.time()), "hash": "x"},
+            json={"id": 1, "first_name": "X"},
         )
     assert response.status_code in (404, 405)
 
@@ -330,18 +254,6 @@ async def test_no_bearer_auth_path(tmp_path) -> None:
         response = await client.get("/", headers={"Authorization": "Bearer fake-token"})
     assert response.status_code == 303
     assert response.headers["location"] == "/login"
-
-
-async def test_web_auth_still_enforces_crypto(tmp_path) -> None:
-    """/auth/telegram rejects dev_hash when dev_login=False."""
-    settings = build_settings(tmp_path, bot_token=BOT_TOKEN, dev_login=False)
-    async with app_client(settings) as client:
-        web = await client.get(
-            "/auth/telegram",
-            params={"id": "1", "first_name": "X", "auth_date": str(int(time.time())), "hash": "dev_hash_test"},
-        )
-        assert web.status_code == 303
-        assert "error=signature" in web.headers["location"]
 
 
 # --- Phase 2: Journal HTML ---------------------------------------------------
@@ -620,12 +532,11 @@ async def test_journal_other_user_data_not_visible(tmp_path) -> None:
 
 async def test_journal_shows_navigation(tmp_path) -> None:
     async with app_client(build_settings(tmp_path)) as client:
-        await _login(client, telegram_id=50, first_name="Nav")
+        await _login(client, telegram_id=50)
         response = await client.get("/")
     assert response.status_code == 200
     assert "Postbox" in response.text
     assert "Выйти" in response.text
-    assert "Nav" in response.text
 
 
 # --- Phase 3: routing / proxy ------------------------------------------------

@@ -18,51 +18,17 @@ def _env_bool(name: str, *, default: bool) -> bool:
 
 
 @dataclass(frozen=True, slots=True)
-class Settings:
-    """Runtime settings loaded from environment variables."""
-
-    bot_token: str
-    database_url: str
-    log_level: str = "INFO"
-
-    TOKEN_VARIABLE: ClassVar[str] = "POSTBOX_BOT_TOKEN"
-    DATABASE_URL_VARIABLE: ClassVar[str] = "POSTBOX_DATABASE_URL"
-    LOG_LEVEL_VARIABLE: ClassVar[str] = "POSTBOX_LOG_LEVEL"
-
-    @classmethod
-    def from_env(cls, env_file: str | Path = ".env") -> Settings:
-        load_dotenv(dotenv_path=env_file, override=False)
-
-        token = os.getenv(cls.TOKEN_VARIABLE, "").strip()
-        if not token:
-            message = f"{cls.TOKEN_VARIABLE} is required"
-            raise ConfigurationError(message)
-
-        database_url = os.getenv(cls.DATABASE_URL_VARIABLE, "").strip()
-        if not database_url:
-            message = f"{cls.DATABASE_URL_VARIABLE} is required"
-            raise ConfigurationError(message)
-
-        log_level = os.getenv(cls.LOG_LEVEL_VARIABLE, "INFO").strip().upper() or "INFO"
-        return cls(bot_token=token, database_url=database_url, log_level=log_level)
-
-
-@dataclass(frozen=True, slots=True)
 class WebSettings:
-    """Settings for the web application (HTTP transport + Telegram login)."""
+    """Settings for the web application (HTTP transport + Hub Bot auth)."""
 
     database_url: str
     jwt_secret_key: str
     log_level: str = "INFO"
     registration_limit: int = 5
-    # Telegram Login Widget: bot token verifies the signed login payload; the
-    # username renders the widget. Both come from BotFather.
-    bot_token: str | None = None
-    bot_username: str | None = None
     # Session cookie: Secure is on by default and only disabled for local dev/test.
     cookie_secure: bool = True
     # Dev login: when true, a password-less dev login form is accepted. Off by
-    # default so production never bypasses Telegram signature verification.
+    # default so production never bypasses signature verification.
     dev_login: bool = False
     # Hub Bot integration: shared secret for verifying Hub JWT tokens.
     # If absent, Hub authentication is disabled.
@@ -72,8 +38,6 @@ class WebSettings:
     JWT_SECRET_KEY_VARIABLE: ClassVar[str] = "POSTBOX_JWT_SECRET_KEY"
     LOG_LEVEL_VARIABLE: ClassVar[str] = "POSTBOX_LOG_LEVEL"
     REGISTRATION_LIMIT_VARIABLE: ClassVar[str] = "POSTBOX_REGISTRATION_LIMIT"
-    BOT_TOKEN_VARIABLE: ClassVar[str] = "POSTBOX_BOT_TOKEN"
-    BOT_USERNAME_VARIABLE: ClassVar[str] = "POSTBOX_BOT_USERNAME"
     COOKIE_SECURE_VARIABLE: ClassVar[str] = "POSTBOX_COOKIE_SECURE"
     DEV_LOGIN_VARIABLE: ClassVar[str] = "POSTBOX_DEV_LOGIN"
     HUB_AUTH_SECRET_VARIABLE: ClassVar[str] = "HUB_AUTH_SECRET"
@@ -104,8 +68,6 @@ class WebSettings:
             jwt_secret_key=jwt_secret,
             log_level=log_level,
             registration_limit=registration_limit,
-            bot_token=os.getenv(cls.BOT_TOKEN_VARIABLE, "").strip() or None,
-            bot_username=os.getenv(cls.BOT_USERNAME_VARIABLE, "").strip() or None,
             cookie_secure=_env_bool(cls.COOKIE_SECURE_VARIABLE, default=True),
             dev_login=_env_bool(cls.DEV_LOGIN_VARIABLE, default=False),
             hub_auth_secret=os.getenv(cls.HUB_AUTH_SECRET_VARIABLE, "").strip() or None,

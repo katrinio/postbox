@@ -15,7 +15,7 @@ This guide covers deploying Postbox to a VPS using Docker Compose and nginx reve
               │  0.0.0.0:8000 (→ host 8014)│
               │                            │
               │  ├── /login                │
-              │  ├── /auth/telegram        │
+              │  ├── /auth/hub             │
               │  ├── /logout               │
               │  ├── / (journal)           │
               │  ├── /static/...           │
@@ -38,7 +38,7 @@ This guide covers deploying Postbox to a VPS using Docker Compose and nginx reve
 - Ubuntu/Debian server with Docker and Docker Compose
 - nginx reverse proxy (configured outside this repository)
 - curl or equivalent for health checks
-- Telegram BotFather app to register your domain
+- The Hub Bot deployment with matching `HUB_AUTH_SECRET`
 
 ## Initial Setup
 
@@ -66,9 +66,10 @@ cat > .env << 'EOF'
 POSTBOX_JWT_SECRET_KEY=replace-with-output-of-openssl-rand-hex-32
 POSTBOX_PUBLIC_URL=https://postbox.finpipe.net
 
-# Telegram Login Widget (REQUIRED for production auth)
-POSTBOX_BOT_TOKEN=replace-with-botfather-token
-POSTBOX_BOT_USERNAME=replace-with-bot-username
+# Hub Bot integration (REQUIRED for authentication)
+HUB_AUTH_SECRET=replace-with-hub-shared-secret
+
+# Session security
 POSTBOX_COOKIE_SECURE=true
 POSTBOX_DEV_LOGIN=false
 
@@ -376,30 +377,13 @@ docker compose up -d
 
 ## Telegram Login Widget Configuration
 
-Register your domain with Telegram BotFather for the Login Widget:
-
-1. Open Telegram and message [@BotFather](https://t.me/botfather)
-2. Send `/setdomain`
-3. Select your bot
-4. Enter: `postbox.finpipe.net`
-
-Required environment variables (in `.env`):
-
-```
-POSTBOX_BOT_TOKEN=<token from BotFather>
-POSTBOX_BOT_USERNAME=<bot username without @>
-```
-
-The Login Widget on `/login` will redirect to `/auth/telegram` with signed
-query parameters, which the server verifies cryptographically.
-
 ### Production checklist
 
-- `POSTBOX_BOT_TOKEN` is set (non-empty, real token from BotFather)
-- `POSTBOX_BOT_USERNAME` is set (matches the bot)
+Authentication uses The Hub Bot (no standalone bot needed):
+- `HUB_AUTH_SECRET` is set (shared with The Hub Bot)
+- `POSTBOX_JWT_SECRET_KEY` is strong (32+ chars)
 - `POSTBOX_COOKIE_SECURE=true` (cookies require HTTPS)
 - `POSTBOX_DEV_LOGIN=false` (no dev bypass in production)
-- Domain `postbox.finpipe.net` registered with BotFather (`/setdomain`)
 
 ## Troubleshooting
 
