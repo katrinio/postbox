@@ -47,7 +47,10 @@ jobs:
             }
 
             echo "🔍 Validating production configuration..."
+            set -a
             source .env
+            set +a
+
             bash scripts/validate-production-config.sh
 
             docker compose up -d --build --remove-orphans
