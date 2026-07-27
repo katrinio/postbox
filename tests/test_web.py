@@ -184,7 +184,96 @@ async def test_logout_without_csrf_is_rejected(tmp_path) -> None:
     assert response.headers["location"] == "/login?error=csrf"
 
 
+# --- Telegram auth security ---------------------------------------------------
+
+
+async def test_dev_hash_rejected_when_not_allowed(tmp_path) -> None:
+    bad = {"id": 999, "first_name": "Hacker", "hash": "dev_hash_bypass"}
+    async with app_client(build_settings(tmp_path, dev_login=False)) as client:
+        response = await client.get("/auth/telegram", params=bad)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?error=signature"
+
+
+async def test_tampered_telegram_payload_rejected(tmp_path) -> None:
+    payload = signed_login(id=100, first_name="Alice")
+    payload["first_name"] = "Mallory"
+    async with app_client(build_settings(tmp_path)) as client:
+        response = await client.get("/auth/telegram", params=payload)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?error=signature"
+
+
+async def test_stale_telegram_auth_date_rejected(tmp_path) -> None:
+    import time
+
+    stale = signed_login(id=101, first_name="Old", auth_date=int(time.time()) - 25 * 24 * 3600)
+    async with app_client(build_settings(tmp_path)) as client:
+        response = await client.get("/auth/telegram", params=stale)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?error=signature"
+
+
+async def test_future_telegram_auth_date_accepted_with_skew(tmp_path) -> None:
+    import time
+
+    future_but_ok = signed_login(id=102, first_name="Future", auth_date=int(time.time()) + 60)
+    async with app_client(build_settings(tmp_path)) as client:
+        response = await client.get("/auth/telegram", params=future_but_ok)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+
+
 # --- Existing behavior preserved ----------------------------------------------
+
+
+# --- JWT security ------------------------------------------------------------
+
+
+async def test_jwt_with_wrong_algorithm_rejected(tmp_path) -> None:
+    import jwt
+
+    settings = build_settings(tmp_path)
+    bad_token = jwt.encode({"user_id": 1}, settings.jwt_secret_key, algorithm="HS512")
+    async with app_client(settings) as client:
+        client.cookies.set("postbox_session", bad_token)
+        response = await client.get("/")
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
+
+
+async def test_jwt_tampered_signature_rejected(tmp_path) -> None:
+    import jwt
+
+    settings = build_settings(tmp_path)
+    good_token = jwt.encode({"user_id": 1}, settings.jwt_secret_key, algorithm="HS256")
+    tampered = good_token[:-10] + "0123456789"
+    async with app_client(settings) as client:
+        client.cookies.set("postbox_session", tampered)
+        response = await client.get("/")
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
+
+
+async def test_jwt_expired_rejected(tmp_path) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    import jwt
+
+    settings = build_settings(tmp_path)
+    expired = jwt.encode(
+        {"user_id": 1, "exp": datetime.now(UTC) - timedelta(hours=1)},
+        settings.jwt_secret_key,
+        algorithm="HS256",
+    )
+    async with app_client(settings) as client:
+        client.cookies.set("postbox_session", expired)
+        response = await client.get("/")
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
+
+
+# --- Existing behavior preserved -------------------------------------------
 
 
 async def test_health_and_ready_still_json(tmp_path) -> None:
