@@ -886,7 +886,8 @@ async def test_detail_shows_item(tmp_path) -> None:
     assert response.status_code == 200
     assert "Детальная" in response.text
     assert "Исходящее письмо" in response.text
-    assert "Отметить полученным" in response.text
+    assert "Отправлено" in response.text
+    assert "Редактировать" in response.text
 
 
 async def test_detail_other_user_returns_404(tmp_path) -> None:
