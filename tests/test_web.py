@@ -321,42 +321,6 @@ async def test_journal_empty_state(tmp_path) -> None:
     assert "Добавить письмо" in response.text
 
 
-async def test_journal_filter_in_transit(tmp_path) -> None:
-    today = date.today()
-    settings = build_settings(tmp_path)
-    app = create_app(settings)
-    async with app.router.lifespan_context(app):
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
-            await _login(client, telegram_id=30, first_name="Filter")
-            from postbox.auth import decode_jwt_token
-
-            token = client.cookies.get("postbox_session")
-            user_id = decode_jwt_token(token, JWT_SECRET)["user_id"]
-
-            await _seed_mail(
-                app,
-                user_id,
-                [
-                    {"correspondent": "InTransit", "direction": "outgoing", "sent_at": today - timedelta(days=3)},
-                    {
-                        "correspondent": "Received",
-                        "direction": "outgoing",
-                        "sent_at": today - timedelta(days=10),
-                        "received_at": today - timedelta(days=1),
-                    },
-                ],
-            )
-
-            all_resp = await client.get("/")
-            filtered = await client.get("/?filter=in_transit")
-
-    assert "InTransit" in all_resp.text
-    assert "Received" in all_resp.text
-    assert "InTransit" in filtered.text
-    assert "Received" not in filtered.text
-
-
 async def test_journal_invalid_filter_defaults_to_all(tmp_path) -> None:
     async with app_client(build_settings(tmp_path)) as client:
         await _login(client, telegram_id=31)
@@ -944,78 +908,6 @@ async def test_detail_other_user_returns_404(tmp_path) -> None:
     assert response.status_code == 404
 
 
-# --- Mark received ------------------------------------------------------
-
-
-async def test_mark_received(tmp_path) -> None:
-    today = date.today()
-    settings = build_settings(tmp_path)
-    app = create_app(settings)
-    async with app.router.lifespan_context(app):
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
-            await _login(client, telegram_id=80, first_name="Marker")
-            await client.get("/")
-            csrf = client.cookies.get("postbox_csrf")
-
-            await client.post(
-                "/mail",
-                data={
-                    "csrf_token": csrf,
-                    "direction": "outgoing",
-                    "correspondent": "Получатель",
-                    "mail_date": str(today - timedelta(days=5)),
-                },
-            )
-
-            journal = await client.get("/")
-            import re
-
-            match = re.search(r'href="/mail/(\d+)"', journal.text)
-            assert match
-            mail_id = match.group(1)
-
-            response = await client.post(
-                f"/mail/{mail_id}/received",
-                data={"csrf_token": csrf, "received_date": str(today)},
-            )
-            assert response.status_code == 303
-
-            journal2 = await client.get("/")
-    assert "Дошло" in journal2.text
-
-
-async def test_mark_received_requires_csrf(tmp_path) -> None:
-    async with app_client(build_settings(tmp_path)) as client:
-        await _login(client, telegram_id=81)
-        response = await client.post("/mail/1/received", data={"csrf_token": "bad", "received_date": str(date.today())})
-    assert response.status_code == 303
-    assert "error=csrf" in response.headers["location"]
-
-
-async def test_mark_received_other_user_returns_404(tmp_path) -> None:
-    today = date.today()
-    settings = build_settings(tmp_path)
-    app = create_app(settings)
-    async with app.router.lifespan_context(app):
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
-            await _login(client, telegram_id=82, first_name="Owner")
-            from postbox.auth import decode_jwt_token
-
-            token = client.cookies.get("postbox_session")
-            uid = decode_jwt_token(token, JWT_SECRET)["user_id"]
-            await _seed_mail(
-                app, uid, [{"correspondent": "X", "direction": "outgoing", "sent_at": today - timedelta(days=1)}]
-            )
-
-            await _login(client, telegram_id=83, first_name="Other")
-            await client.get("/")
-            csrf = client.cookies.get("postbox_csrf")
-            response = await client.post("/mail/1/received", data={"csrf_token": csrf, "received_date": str(today)})
-    assert response.status_code == 404
-
-
 # --- Notes --------------------------------------------------------------
 
 
@@ -1246,15 +1138,6 @@ async def test_empty_journal_has_create_cta(tmp_path) -> None:
         response = await client.get("/")
     assert "Журнал пока пуст" in response.text
     assert 'href="/mail/new"' in response.text
-
-
-async def test_filtered_empty_state_differs(tmp_path) -> None:
-    async with app_client(build_settings(tmp_path)) as client:
-        await _login(client, telegram_id=97)
-        response = await client.get("/?filter=in_transit")
-    assert response.status_code == 200
-    assert "В пути сейчас ничего нет" in response.text
-    assert "Журнал пока пуст" not in response.text
 
 
 # --- Flash messages -----------------------------------------------------

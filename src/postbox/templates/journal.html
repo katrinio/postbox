@@ -22,7 +22,7 @@
       class="filter-pill{% if current_filter == fid %} filter-pill--active{% endif %}"
       href="{{ journal_url(filter_value=fid, geography=geography_filter) }}"
       {% if current_filter == fid %}aria-current="page"{% endif %}
-    >{{ flabel }}{% if fid == "all" and stats.total %} <span class="filter-pill__count">{{ stats.total }}</span>{% elif fid == "in_transit" and stats.in_transit %} <span class="filter-pill__count">{{ stats.in_transit }}</span>{% elif fid == "outgoing" and stats.outgoing %} <span class="filter-pill__count">{{ stats.outgoing }}</span>{% elif fid == "incoming" and stats.incoming %} <span class="filter-pill__count">{{ stats.incoming }}</span>{% endif %}</a>
+    >{{ flabel }}{% if fid == "all" and stats.total %} <span class="filter-pill__count">{{ stats.total }}</span>{% elif fid == "outgoing" and stats.outgoing %} <span class="filter-pill__count">{{ stats.outgoing }}</span>{% elif fid == "incoming" and stats.incoming %} <span class="filter-pill__count">{{ stats.incoming }}</span>{% endif %}</a>
     {% endfor %}
   </nav>
 
@@ -102,14 +102,11 @@
     <p class="empty-state__title">Журнал пока пуст</p>
     <p class="empty-state__text">Добавьте первое отправленное или полученное письмо, чтобы начать журнал.</p>
     <a class="primary-button" href="/mail/new">Добавить письмо</a>
-    {% elif current_filter == "in_transit" %}
-    <p class="empty-state__title">В пути сейчас ничего нет</p>
-    <p class="empty-state__text"><a href="/">Показать все письма</a></p>
     {% elif current_filter == "outgoing" %}
-    <p class="empty-state__title">Исходящих писем пока нет</p>
+    <p class="empty-state__title">Отправленных писем пока нет</p>
     <p class="empty-state__text"><a href="/">Показать все письма</a></p>
     {% elif current_filter == "incoming" %}
-    <p class="empty-state__title">Входящих писем пока нет</p>
+    <p class="empty-state__title">Полученных писем пока нет</p>
     <p class="empty-state__text"><a href="/">Показать все письма</a></p>
     {% endif %}
   </div>

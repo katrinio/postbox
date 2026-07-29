@@ -34,15 +34,6 @@ class MailDirection(StrEnum):
     INCOMING = "incoming"
 
 
-class MailStatus(StrEnum):
-    IN_TRANSIT = "in_transit"
-    RECEIVED = "received"
-
-
-class MailDeliveryError(ValueError):
-    """Raised when a mail delivery transition is not valid."""
-
-
 class MailNoteError(ValueError):
     """Raised when a mail note cannot be saved."""
 
@@ -57,7 +48,6 @@ MAX_CITY_LENGTH = 120
 
 class MailJournalFilter(StrEnum):
     ALL = "all"
-    IN_TRANSIT = "in_transit"
     OUTGOING = "outgoing"
     INCOMING = "incoming"
 
@@ -65,7 +55,6 @@ class MailJournalFilter(StrEnum):
 @dataclass(frozen=True, slots=True)
 class MailJournalStats:
     total: int
-    in_transit: int
     outgoing: int
     incoming: int
 
@@ -160,24 +149,12 @@ class MailItem(ActiveRecord):
     )
 
     @property
-    def status(self) -> MailStatus:
-        if self.received_at is None:
-            return MailStatus.IN_TRANSIT
-        return MailStatus.RECEIVED
-
-    @property
     def journal_date(self) -> date:
         value = self.sent_at if self.direction is MailDirection.OUTGOING else self.received_at
         if value is None:
             message = f"{self.direction.value} mail {self.id} has no journal date"
             raise ValueError(message)
         return value
-
-    def travel_days(self, *, today: date | None = None) -> int | None:
-        if self.sent_at is None:
-            return None
-        end = self.received_at or today or date.today()
-        return (end - self.sent_at).days
 
     @property
     def geography(self) -> MailGeography:
@@ -187,18 +164,6 @@ class MailItem(ActiveRecord):
             destination_country_code=self.destination_country_code,
             destination_city=self.destination_city,
         )
-
-    async def mark_received(self, session: AsyncSession, *, received_at: date) -> MailItem:
-        if self.direction is not MailDirection.OUTGOING:
-            raise MailDeliveryError("only outgoing mail can be marked as received")
-        if self.received_at is not None:
-            raise MailDeliveryError("mail is already received")
-        if self.sent_at is None or received_at < self.sent_at:
-            raise MailDeliveryError("received date cannot be earlier than sent date")
-        if received_at > date.today():
-            raise MailDeliveryError("received date cannot be in the future")
-        self.received_at = received_at
-        return await self.save(session)
 
     @staticmethod
     def normalize_note(note: str) -> str:
@@ -315,14 +280,12 @@ class MailItem(ActiveRecord):
     async def journal_stats(cls, session: AsyncSession, owner_id: int) -> MailJournalStats:
         statement = select(
             func.count(cls.id),
-            func.count(cls.id).filter(cls.direction == MailDirection.OUTGOING, cls.received_at.is_(None)),
             func.count(cls.id).filter(cls.direction == MailDirection.OUTGOING),
             func.count(cls.id).filter(cls.direction == MailDirection.INCOMING),
         ).where(cls.owner_id == owner_id)
-        total, in_transit, outgoing, incoming = (await session.execute(statement)).one()
+        total, outgoing, incoming = (await session.execute(statement)).one()
         return MailJournalStats(
             total=int(total),
-            in_transit=int(in_transit),
             outgoing=int(outgoing),
             incoming=int(incoming),
         )
@@ -339,9 +302,7 @@ class MailItem(ActiveRecord):
         page_size: int = 5,
     ) -> MailJournalPage:
         conditions = [cls.owner_id == owner_id]
-        if view is MailJournalFilter.IN_TRANSIT:
-            conditions.extend([cls.direction == MailDirection.OUTGOING, cls.received_at.is_(None)])
-        elif view is MailJournalFilter.OUTGOING:
+        if view is MailJournalFilter.OUTGOING:
             conditions.append(cls.direction == MailDirection.OUTGOING)
         elif view is MailJournalFilter.INCOMING:
             conditions.append(cls.direction == MailDirection.INCOMING)
