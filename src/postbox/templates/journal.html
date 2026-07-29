@@ -16,11 +16,27 @@
   <div class="flash-message" role="status">{{ flash }}</div>
   {% endif %}
 
+  {% if correspondents %}
+  <form method="get" action="/" class="correspondent-filter">
+    <select name="correspondent_id" onchange="this.form.submit()">
+      <option value="">Все корреспонденты</option>
+      {% for c in correspondents %}
+      <option value="{{ c.id }}" {% if correspondent_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+    <input type="hidden" name="filter" value="{{ current_filter }}" />
+    {% if geography_filter.origin_country_code %}<input type="hidden" name="origin_country" value="{{ geography_filter.origin_country_code }}" />{% endif %}
+    {% if geography_filter.destination_country_code %}<input type="hidden" name="destination_country" value="{{ geography_filter.destination_country_code }}" />{% endif %}
+    {% if geography_filter.origin_city %}<input type="hidden" name="origin_city" value="{{ geography_filter.origin_city }}" />{% endif %}
+    {% if geography_filter.destination_city %}<input type="hidden" name="destination_city" value="{{ geography_filter.destination_city }}" />{% endif %}
+  </form>
+  {% endif %}
+
   <nav class="filter-row" aria-label="Фильтры журнала">
     {% for fid, flabel in filters %}
     <a
       class="filter-pill{% if current_filter == fid %} filter-pill--active{% endif %}"
-      href="{{ journal_url(filter_value=fid, geography=geography_filter) }}"
+      href="{{ journal_url(filter_value=fid, correspondent_id=correspondent_id, geography=geography_filter) }}"
       {% if current_filter == fid %}aria-current="page"{% endif %}
     >{{ flabel }}{% if fid == "all" and stats.total %} <span class="filter-pill__count">{{ stats.total }}</span>{% elif fid == "outgoing" and stats.outgoing %} <span class="filter-pill__count">{{ stats.outgoing }}</span>{% elif fid == "incoming" and stats.incoming %} <span class="filter-pill__count">{{ stats.incoming }}</span>{% endif %}</a>
     {% endfor %}
@@ -48,7 +64,7 @@
       </label>
       <div class="geo-filter__actions">
         <button class="ghost-button ghost-button--sm" type="submit">Применить</button>
-        <a class="ghost-button ghost-button--sm" href="/?filter={{ current_filter }}">Сбросить места</a>
+        <a class="ghost-button ghost-button--sm" href="{{ journal_url(filter_value=current_filter, correspondent_id=correspondent_id) }}">Сбросить места</a>
       </div>
     </form>
   </details>
@@ -56,37 +72,18 @@
   {% if journal.items %}
   <div class="journal-list">
     {% for item in journal.items %}
-    <a class="journal-row" href="/mail/{{ item.id }}">
-      <span class="journal-row__icon journal-row__icon--{{ item.direction.value }}" aria-hidden="true">
-        {% if item.direction.value == "incoming" %}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="17 17 7 17 7 7"/></svg>
-        {% else %}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
-        {% endif %}
-      </span>
-      <div class="journal-row__body">
-        <h3 class="journal-row__name">{{ item.correspondent.name }}</h3>
-        <p class="journal-row__meta">
-          {% if item.direction.value == "incoming" %}Входящее{% else %}Исходящее{% endif %}
-          · {{ format_status(item) }}
-          {% if item.note %}<span class="journal-row__note-indicator" title="Есть заметка">✎</span>{% endif %}
-        </p>
-        {% set route = format_route(item) %}
-        {% if route %}<p class="journal-row__route">{{ route }}</p>{% endif %}
-      </div>
-      <time class="journal-row__date" datetime="{{ item.journal_date.isoformat() }}">{{ format_date(item.journal_date) }}</time>
-    </a>
+    {% include "_mail_journal_item.html" %}
     {% endfor %}
   </div>
 
   {% if journal.pages > 1 %}
   <nav class="pagination" aria-label="Страницы журнала">
     {% if journal.page > 1 %}
-    <a class="pagination__link" href="{{ journal_url(filter_value=current_filter, geography=geography_filter, page=journal.page - 1) }}">&larr; Назад</a>
+    <a class="pagination__link" href="{{ journal_url(filter_value=current_filter, correspondent_id=correspondent_id, geography=geography_filter, page=journal.page - 1) }}">&larr; Назад</a>
     {% endif %}
     <span class="pagination__info">{{ journal.page }} / {{ journal.pages }}</span>
     {% if journal.page < journal.pages %}
-    <a class="pagination__link" href="{{ journal_url(filter_value=current_filter, geography=geography_filter, page=journal.page + 1) }}">Вперёд &rarr;</a>
+    <a class="pagination__link" href="{{ journal_url(filter_value=current_filter, correspondent_id=correspondent_id, geography=geography_filter, page=journal.page + 1) }}">Вперёд &rarr;</a>
     {% endif %}
   </nav>
   {% endif %}

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}{{ correspondent.name }} — Postbox{% endblock %}
+
+{% block content %}
+<section class="correspondent-screen">
+  <div class="correspondent-header">
+    <a class="back-link" href="/">← К журналу</a>
+    <h1>{{ correspondent.name }}</h1>
+
+    <dl class="correspondent-stats">
+      <div>
+        <dt>Отправлено</dt>
+        <dd>{{ outgoing_count }}</dd>
+      </div>
+      <div>
+        <dt>Получено</dt>
+        <dd>{{ incoming_count }}</dd>
+      </div>
+    </dl>
+  </div>
+
+  {% if flash %}
+  <div class="flash-message" role="status">{{ flash }}</div>
+  {% endif %}
+
+  <div class="correspondent-note">
+    <h2>Заметка</h2>
+    <form method="post" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+      <textarea name="note" rows="4" placeholder="Добавь заметку...">{{ correspondent.note or '' }}</textarea>
+      <button class="primary-button" type="submit">Сохранить</button>
+    </form>
+  </div>
+
+  {% if journal.items %}
+  <div class="correspondent-history">
+    <h2>История переписки</h2>
+    <div class="journal-list">
+      {% for item in journal.items %}
+      {% include "_mail_journal_item.html" %}
+      {% endfor %}
+    </div>
+
+    {% if journal.pages > 1 %}
+    <nav class="pagination" aria-label="Страницы переписки">
+      {% if journal.page > 1 %}
+      <a class="pagination__link" href="/correspondent/{{ correspondent.id }}?page={{ journal.page - 1 }}">&larr; Назад</a>
+      {% endif %}
+      <span class="pagination__info">{{ journal.page }} / {{ journal.pages }}</span>
+      {% if journal.page < journal.pages %}
+      <a class="pagination__link" href="/correspondent/{{ correspondent.id }}?page={{ journal.page + 1 }}">Вперёд &rarr;</a>
+      {% endif %}
+    </nav>
+    {% endif %}
+  </div>
+  {% else %}
+
+  <div class="empty-state">
+    <svg class="empty-state__icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+    <p class="empty-state__title">Переписка с этим человеком ещё не началась</p>
+    <p class="empty-state__text"><a href="/mail/new">Добавить письмо</a></p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -291,17 +291,29 @@ class MailItem(ActiveRecord):
         )
 
     @classmethod
+    async def correspondent_stats(cls, session: AsyncSession, owner_id: int, correspondent_id: int) -> tuple[int, int]:
+        statement = select(
+            func.count(cls.id).filter(cls.direction == MailDirection.OUTGOING),
+            func.count(cls.id).filter(cls.direction == MailDirection.INCOMING),
+        ).where(cls.owner_id == owner_id, cls.correspondent_id == correspondent_id)
+        outgoing, incoming = (await session.execute(statement)).one()
+        return int(outgoing), int(incoming)
+
+    @classmethod
     async def journal_page(
         cls,
         session: AsyncSession,
         owner_id: int,
         *,
         view: MailJournalFilter,
+        correspondent_id: int | None = None,
         geography: MailGeographyFilter | None = None,
         page: int = 1,
         page_size: int = 5,
     ) -> MailJournalPage:
         conditions = [cls.owner_id == owner_id]
+        if correspondent_id is not None:
+            conditions.append(cls.correspondent_id == correspondent_id)
         if view is MailJournalFilter.OUTGOING:
             conditions.append(cls.direction == MailDirection.OUTGOING)
         elif view is MailJournalFilter.INCOMING:
