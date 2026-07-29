@@ -1,29 +1,26 @@
 {% set route = format_route(item) %}
 {% set show_name = show_correspondent | default(true) %}
 <article class="journal-row">
-  <span class="journal-row__icon journal-row__icon--{{ item.direction.value }}" aria-hidden="true">
-    {% if item.direction.value == "incoming" %}
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="17 17 7 17 7 7"/></svg>
-    {% else %}
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
-    {% endif %}
-  </span>
+  <a class="journal-row__link" href="/mail/{{ item.id }}">
+    <span class="journal-row__icon journal-row__icon--{{ item.direction.value }}" aria-hidden="true">
+      {% if item.direction.value == "incoming" %}
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="17 17 7 17 7 7"/></svg>
+      {% else %}
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+      {% endif %}
+    </span>
 
-  <div class="journal-row__body">
-    {% if show_name %}
-    <a class="journal-row__name" href="/correspondent/{{ item.correspondent.id }}">{{ item.correspondent.name }}</a>
-    {% endif %}
-    <a class="journal-row__details" href="/mail/{{ item.id }}">
-      <span class="journal-row__meta">
-        {% if item.direction.value == "incoming" %}Входящее{% else %}Исходящее{% endif %}
-        · {{ format_status(item) }}
+    <span class="journal-row__body">
+      {% if show_name %}
+      <span class="journal-row__name">{{ item.correspondent.name }}</span>
+      {% endif %}
+      <span class="journal-row__route">
+        {% if route %}{{ route }}{% else %}<span class="journal-row__route-empty">Маршрут не указан</span>{% endif %}
         {% if item.note %}<span class="journal-row__note-indicator" title="Есть заметка">✎</span>{% endif %}
       </span>
-      {% if route %}<span class="journal-row__route">{{ route }}</span>{% endif %}
-    </a>
-  </div>
-
-  <a class="journal-row__date" href="/mail/{{ item.id }}" aria-label="Открыть письмо от {{ format_date(item.journal_date) }}">
-    <time datetime="{{ item.journal_date.isoformat() }}">{{ format_date(item.journal_date) }}</time>
+      <span class="journal-row__event">
+        {{ format_status(item) }} · <time datetime="{{ item.journal_date.isoformat() }}">{{ format_date(item.journal_date) }}</time>
+      </span>
+    </span>
   </a>
 </article>

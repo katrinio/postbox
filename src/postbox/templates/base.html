@@ -28,6 +28,11 @@
     <header class="site-header">
       <a class="site-header__brand" href="/">Postbox</a>
       {% if user is defined and user %}
+      {% set path = request.url.path %}
+      <nav class="site-header__sections" aria-label="Разделы">
+        <a class="site-header__section{% if path == '/' or path.startswith('/mail') %} site-header__section--active{% endif %}" href="/" {% if path == '/' or path.startswith('/mail') %}aria-current="page"{% endif %}>Журнал</a>
+        <a class="site-header__section{% if path.startswith('/correspondent') %} site-header__section--active{% endif %}" href="/correspondents" {% if path.startswith('/correspondent') %}aria-current="page"{% endif %}>Корреспонденты</a>
+      </nav>
       <nav class="site-header__nav">
         <span class="site-header__user">{{ user.first_name }}</span>
         <form method="post" action="/logout" class="site-header__logout">

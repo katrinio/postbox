@@ -333,8 +333,10 @@ async def test_journal_renders_mail_items(tmp_path) -> None:
     assert response.status_code == 200
     assert "Маша" in response.text
     assert "Аня" in response.text
-    assert "Исходящее" in response.text
-    assert "Входящее" in response.text
+    assert "Отправлено" in response.text
+    assert "Получено" in response.text
+    assert "Исходящее" not in response.text
+    assert "Входящее" not in response.text
 
 
 async def test_journal_items_are_sorted_and_have_separate_links(tmp_path) -> None:
@@ -362,17 +364,17 @@ async def test_journal_items_are_sorted_and_have_separate_links(tmp_path) -> Non
                 ],
             )
 
-            async with app.state.database.session_factory() as session:
-                newest = await Correspondent.find_or_create(session, owner_id=user_id, name="Newest Person")
-                newest_id = newest.id
-
             response = await client.get("/")
 
     assert response.status_code == 200
     assert response.text.index("Newest Person") < response.text.index("Older Route")
-    assert f'href="/correspondent/{newest_id}"' in response.text
-    assert 'class="journal-row__details" href="/mail/' in response.text
+    assert 'class="journal-row__link" href="/mail/' in response.text
+    assert 'class="journal-row__name" href="/correspondent/' not in response.text
     assert '<a class="journal-row"' not in response.text
+    assert "Получено · <time" in response.text
+    assert "Отправлено · <time" in response.text
+    assert "Исходящее" not in response.text
+    assert "Входящее" not in response.text
     assert not _has_nested_anchor(response.text)
 
 
@@ -391,22 +393,34 @@ async def test_journal_filters_and_pagination_keep_working(tmp_path) -> None:
                 [
                     *[
                         {
-                            "correspondent": f"In {index}",
+                            "correspondent": "Filtered Person",
                             "direction": "incoming",
                             "received_at": today - timedelta(days=index),
+                            "origin_country_code": "DE",
                         }
                         for index in range(52)
                     ],
-                    {"correspondent": "Out Only", "direction": "outgoing", "sent_at": today},
+                    {
+                        "correspondent": "Out Only",
+                        "direction": "outgoing",
+                        "sent_at": today,
+                        "origin_country_code": "FR",
+                    },
                 ],
             )
 
-            page_two = await client.get("/?filter=incoming&page=2")
+            async with app.state.database.session_factory() as session:
+                corr = await Correspondent.find_or_create(session, owner_id=user_id, name="Filtered Person")
+                correspondent_id = corr.id
+
+            page_two = await client.get(f"/?filter=incoming&country=DE&correspondent_id={correspondent_id}&page=2")
 
     assert page_two.status_code == 200
-    assert "Входящее" in page_two.text
-    assert "Исходящее" not in page_two.text
-    assert 'href="/?filter=incoming&amp;page=1"' in page_two.text
+    assert "Получено" in page_two.text
+    assert "Отправлено · <time" not in page_two.text
+    assert f'href="/?filter=all&amp;correspondent_id={correspondent_id}&amp;country=DE"' in page_two.text
+    previous_page_link = f'href="/?filter=incoming&amp;correspondent_id={correspondent_id}&amp;country=DE&amp;page=1"'
+    assert previous_page_link in page_two.text
     assert 'href="/?filter=incoming&amp;page=3"' not in page_two.text
 
 
@@ -464,7 +478,8 @@ async def test_journal_renders_geography_compactly(tmp_path) -> None:
     assert "Berlin, DE -&gt; Paris, FR" in response.text
     assert "CZ -&gt; Rome" in response.text
     assert "NoRoute" in response.text
-    assert "/correspondent/" in response.text
+    assert 'href="/mail/' in response.text
+    assert "/correspondent/" not in response.text
 
 
 async def test_journal_escapes_city_geography(tmp_path) -> None:
@@ -493,7 +508,7 @@ async def test_journal_escapes_city_geography(tmp_path) -> None:
     assert "&lt;script&gt;" in response.text
 
 
-async def test_journal_geography_filters_compose_and_stay_private(tmp_path) -> None:
+async def test_journal_country_filter_matches_either_route_end_and_stays_private(tmp_path) -> None:
     today = date.today()
     settings = build_settings(tmp_path)
     app = create_app(settings)
@@ -524,6 +539,12 @@ async def test_journal_geography_filters_compose_and_stay_private(tmp_path) -> N
                         "destination_city": "Berlin",
                         "destination_country_code": "DE",
                     },
+                    {
+                        "correspondent": "PragueOnly",
+                        "direction": "outgoing",
+                        "sent_at": today,
+                        "origin_country_code": "CZ",
+                    },
                 ],
             )
             await _login(client, telegram_id=35, first_name="Other")
@@ -537,29 +558,30 @@ async def test_journal_geography_filters_compose_and_stay_private(tmp_path) -> N
                         "direction": "outgoing",
                         "sent_at": today,
                         "origin_city": "Berlin",
-                        "origin_country_code": "DE",
+                        "origin_country_code": "JP",
                         "destination_city": "Paris",
-                        "destination_country_code": "FR",
+                        "destination_country_code": "JP",
                     }
                 ],
             )
             await _login(client, telegram_id=34, first_name="Owner")
 
-            origin_country = await client.get("/?origin_country=de")
-            destination_country = await client.get("/?destination_country=fr")
-            origin_city = await client.get("/?origin_city= berlin ")
-            destination_city = await client.get("/?destination_city=paris")
-            composed = await client.get("/?filter=outgoing&origin_country=DE&destination_city=PARIS")
-            invalid = await client.get("/?origin_country=bad")
+            de_country = await client.get("/?country=de")
+            fr_country = await client.get("/?country=fr")
+            unknown_country = await client.get("/?country=JP")
+            invalid = await client.get("/?country=bad")
 
-    assert "BerlinOutgoing" in origin_country.text
-    assert "BerlinOutgoing" in destination_country.text
-    assert "BerlinOutgoing" in origin_city.text
-    assert "BerlinOutgoing" in destination_city.text
-    assert "BerlinOutgoing" in composed.text
-    assert "PrivateParis" not in origin_country.text
+    assert "BerlinOutgoing" in de_country.text
+    assert "RomeIncoming" in de_country.text
+    assert ">PragueOnly</a>" not in de_country.text
+    assert "BerlinOutgoing" in fr_country.text
+    assert ">RomeIncoming</a>" not in fr_country.text
+    assert ">PrivateParis</a>" not in de_country.text
+    assert ">JP<" not in de_country.text
+    assert ">PrivateParis</a>" not in unknown_country.text
+    assert unknown_country.status_code == 200
     assert invalid.status_code == 200
-    assert origin_country.status_code == 200
+    assert de_country.status_code == 200
 
 
 async def test_journal_other_user_data_not_visible(tmp_path) -> None:
@@ -768,7 +790,7 @@ async def test_create_incoming_mail(tmp_path) -> None:
 
             journal = await client.get("/")
     assert "Аня" in journal.text
-    assert "Входящее" in journal.text
+    assert "Получено" in journal.text
 
 
 async def test_create_outgoing_mail_with_full_geography(tmp_path) -> None:
@@ -1293,6 +1315,82 @@ async def test_flash_after_create(tmp_path) -> None:
 # --- Correspondent detail page ---
 
 
+async def test_top_navigation_links_journal_and_correspondents(tmp_path) -> None:
+    async with app_client(build_settings(tmp_path)) as client:
+        await _login(client, telegram_id=76)
+        journal = await client.get("/")
+        correspondents = await client.get("/correspondents")
+
+    assert 'href="/correspondents"' in journal.text
+    assert 'href="/"' in correspondents.text
+    assert "Корреспонденты" in journal.text
+    assert "Журнал" in correspondents.text
+
+
+async def test_correspondents_requires_auth(tmp_path) -> None:
+    async with app_client(build_settings(tmp_path)) as client:
+        response = await client.get("/correspondents")
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
+
+
+async def test_correspondents_list_counts_scope_and_sort(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=70)
+            owner_id = _current_user_id(client)
+            await _seed_mail(
+                app,
+                owner_id,
+                [
+                    {"correspondent": "мария", "direction": "outgoing", "sent_at": today},
+                    {"correspondent": "мария", "direction": "incoming", "received_at": today},
+                    {"correspondent": "Анна", "direction": "incoming", "received_at": today},
+                    {"correspondent": "борис", "direction": "outgoing", "sent_at": today},
+                ],
+            )
+            async with app.state.database.session_factory() as session:
+                await Correspondent.create(session, owner_id=owner_id, name="Zero")
+                await session.commit()
+
+            await _login(client, telegram_id=71)
+            other_id = _current_user_id(client)
+            await _seed_mail(app, other_id, [{"correspondent": "Secret", "direction": "outgoing", "sent_at": today}])
+
+            await _login(client, telegram_id=70)
+            response = await client.get("/correspondents")
+
+    assert response.status_code == 200
+    assert (
+        response.text.index("Zero")
+        < response.text.index("Анна")
+        < response.text.index("борис")
+        < response.text.index("мария")
+    )
+    assert "Secret" not in response.text
+    assert 'aria-label="Отправлено: 0">↗ 0' in response.text
+    assert 'aria-label="Получено: 0">↙ 0' in response.text
+    assert 'aria-label="Отправлено: 0">↗ 0' in response.text
+    assert 'aria-label="Получено: 1">↙ 1' in response.text
+    assert 'aria-label="Отправлено: 1">↗ 1' in response.text
+    assert 'aria-label="Получено: 0">↙ 0' in response.text
+    assert 'class="correspondent-row" href="/correspondent/' in response.text
+
+
+async def test_correspondents_empty_state(tmp_path) -> None:
+    async with app_client(build_settings(tmp_path)) as client:
+        await _login(client, telegram_id=72)
+        response = await client.get("/correspondents")
+
+    assert response.status_code == 200
+    assert "Корреспондентов пока нет" in response.text
+    assert "Они появятся здесь после добавления письма" in response.text
+
+
 async def test_correspondent_detail_shows_stats_and_history(tmp_path) -> None:
     today = date.today()
     settings = build_settings(tmp_path)
@@ -1331,14 +1429,20 @@ async def test_correspondent_detail_shows_stats_and_history(tmp_path) -> None:
             response = await client.get(f"/correspondent/{correspondent_id}")
 
     assert response.status_code == 200
+    assert 'href="/correspondents">← Корреспонденты' in response.text
     assert "Alice" in response.text
-    assert "Отправлено" in response.text
-    assert "2" in response.text
-    assert "Получено" in response.text
-    assert "1" in response.text
+    assert 'aria-label="Отправлено: 2">↗ 2' in response.text
+    assert 'aria-label="Получено: 1">↙ 1' in response.text
     assert response.text.index("Newest") < response.text.index("Middle") < response.text.index("Oldest")
     assert 'class="journal-row__name"' not in response.text
-    assert 'class="journal-row__details" href="/mail/' in response.text
+    assert 'class="journal-row__link" href="/mail/' in response.text
+    assert "Отправлено · <time" in response.text
+    assert "Получено · <time" in response.text
+    assert "Исходящее" not in response.text
+    assert "Входящее" not in response.text
+    assert "Заметки пока нет" in response.text
+    assert 'aria-label="Редактировать заметку"' in response.text
+    assert 'maxlength="250"' in response.text
     assert not _has_nested_anchor(response.text)
 
 
@@ -1370,6 +1474,14 @@ async def test_correspondent_detail_other_user_returns_404(tmp_path) -> None:
     assert response.status_code == 404
 
 
+async def test_correspondent_detail_unknown_returns_404(tmp_path) -> None:
+    async with app_client(build_settings(tmp_path)) as client:
+        await _login(client, telegram_id=82)
+        response = await client.get("/correspondent/999")
+
+    assert response.status_code == 404
+
+
 async def test_correspondent_save_note(tmp_path) -> None:
     today = date.today()
     settings = build_settings(tmp_path)
@@ -1396,7 +1508,7 @@ async def test_correspondent_save_note(tmp_path) -> None:
 
             response = await client.post(
                 f"/correspondent/{correspondent_id}/note",
-                data={"csrf_token": csrf, "note": "Важный контакт"},
+                data={"csrf_token": csrf, "note": "  Важный контакт  "},
                 follow_redirects=False,
             )
 
@@ -1409,6 +1521,81 @@ async def test_correspondent_save_note(tmp_path) -> None:
         corr = await Correspondent.find_for_owner(session, owner_id=user_id, correspondent_id=correspondent_id)
     assert corr is not None
     assert corr.note == "Важный контакт"
+
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=80)
+            saved = await client.get(f"/correspondent/{correspondent_id}")
+    assert "Важный контакт" in saved.text
+    assert "Заметки пока нет" not in saved.text
+
+
+async def test_correspondent_save_empty_note_sets_null(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=83)
+            user_id = _current_user_id(client)
+            await _seed_mail(app, user_id, [{"correspondent": "EmptyNote", "direction": "outgoing", "sent_at": today}])
+            await client.get("/")
+            csrf = client.cookies.get("postbox_csrf")
+
+            async with app.state.database.session_factory() as session:
+                corr = await Correspondent.find_or_create(session, owner_id=user_id, name="EmptyNote")
+                correspondent_id = corr.id
+                corr.note = "Existing"
+                await corr.save(session)
+                await session.commit()
+
+            response = await client.post(
+                f"/correspondent/{correspondent_id}/note",
+                data={"csrf_token": csrf, "note": "   "},
+                follow_redirects=False,
+            )
+
+    assert response.status_code == 303
+    async with app.router.lifespan_context(app), app.state.database.session_factory() as session:
+        corr = await Correspondent.find_for_owner(session, owner_id=user_id, correspondent_id=correspondent_id)
+    assert corr is not None
+    assert corr.note is None
+
+
+async def test_correspondent_save_note_length_limit(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=84)
+            user_id = _current_user_id(client)
+            await _seed_mail(app, user_id, [{"correspondent": "Limit", "direction": "outgoing", "sent_at": today}])
+            await client.get("/")
+            csrf = client.cookies.get("postbox_csrf")
+
+            async with app.state.database.session_factory() as session:
+                corr = await Correspondent.find_or_create(session, owner_id=user_id, name="Limit")
+                correspondent_id = corr.id
+
+            accepted = await client.post(
+                f"/correspondent/{correspondent_id}/note",
+                data={"csrf_token": csrf, "note": "x" * 250},
+                follow_redirects=False,
+            )
+            rejected = await client.post(
+                f"/correspondent/{correspondent_id}/note",
+                data={"csrf_token": csrf, "note": "y" * 251},
+                follow_redirects=False,
+            )
+
+    assert accepted.status_code == 303
+    assert rejected.status_code == 422
+    assert "максимум 250" in rejected.text
+    assert ("y" * 251) in rejected.text
 
 
 async def test_correspondent_save_note_requires_csrf(tmp_path) -> None:
@@ -1440,3 +1627,33 @@ async def test_correspondent_save_note_requires_csrf(tmp_path) -> None:
 
     assert response.status_code == 303
     assert "login?error=csrf" in response.headers["location"]
+
+
+async def test_correspondent_save_note_other_user_returns_404(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=85)
+            owner_id = _current_user_id(client)
+            await _seed_mail(app, owner_id, [{"correspondent": "Private", "direction": "outgoing", "sent_at": today}])
+            async with app.state.database.session_factory() as session:
+                corr = await Correspondent.find_or_create(session, owner_id=owner_id, name="Private")
+                correspondent_id = corr.id
+
+            await _login(client, telegram_id=86)
+            await client.get("/")
+            csrf = client.cookies.get("postbox_csrf")
+            response = await client.post(
+                f"/correspondent/{correspondent_id}/note",
+                data={"csrf_token": csrf, "note": "Hacked"},
+                follow_redirects=False,
+            )
+
+    assert response.status_code == 404
+    async with app.router.lifespan_context(app), app.state.database.session_factory() as session:
+        corr = await Correspondent.find_for_owner(session, owner_id=owner_id, correspondent_id=correspondent_id)
+    assert corr is not None
+    assert corr.note is None

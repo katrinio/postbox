@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Корреспонденты — Postbox{% endblock %}
+
+{% block content %}
+<section class="correspondents-screen" aria-labelledby="correspondents-title">
+  <div class="correspondents-header">
+    <h1 id="correspondents-title">Корреспонденты</h1>
+    <p class="correspondents-subtitle">Люди, с которыми уже есть письма в Postbox.</p>
+  </div>
+
+  {% if summaries %}
+  <div class="correspondent-list">
+    {% for summary in summaries %}
+    <a class="correspondent-row" href="/correspondent/{{ summary.correspondent.id }}">
+      <span class="correspondent-row__name">{{ summary.correspondent.name }}</span>
+      <span class="correspondent-row__stats">
+        <span aria-label="Отправлено: {{ summary.outgoing_count }}">↗ {{ summary.outgoing_count }}</span>
+        <span aria-label="Получено: {{ summary.incoming_count }}">↙ {{ summary.incoming_count }}</span>
+      </span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <p class="empty-state__title">Корреспондентов пока нет</p>
+    <p class="empty-state__text">Они появятся здесь после добавления письма.</p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
