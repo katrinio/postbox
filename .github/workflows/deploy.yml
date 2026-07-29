@@ -53,7 +53,9 @@ jobs:
 
             bash scripts/validate-production-config.sh
 
-            docker compose up -d --build --remove-orphans
+            docker compose build postbox
+            docker compose run --rm --no-deps postbox /opt/venv/bin/alembic upgrade head
+            docker compose up -d --remove-orphans postbox
 
             for i in $(seq 1 30); do
               if curl -fsS http://127.0.0.1:8014/api/ready >/dev/null; then

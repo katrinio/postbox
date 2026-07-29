@@ -26,6 +26,7 @@ def build_settings(tmp_path, **overrides) -> WebSettings:
         hub_auth_secret=HUB_AUTH_SECRET,
         cookie_secure=False,
         dev_login=False,
+        auto_create_tables=True,
     )
     defaults.update(overrides)
     return WebSettings(**defaults)

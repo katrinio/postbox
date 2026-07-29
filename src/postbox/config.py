@@ -30,6 +30,8 @@ class WebSettings:
     # Dev login: when true, a password-less dev login form is accepted. Off by
     # default so production never bypasses signature verification.
     dev_login: bool = False
+    # Test/dev helper: production schema changes must go through Alembic.
+    auto_create_tables: bool = False
     # Hub Bot integration: shared secret for verifying Hub JWT tokens.
     # If absent, Hub authentication is disabled.
     hub_auth_secret: str | None = None

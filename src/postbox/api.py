@@ -34,13 +34,11 @@ def create_app(settings: WebSettings | None = None) -> FastAPI:
         app.state.database = database
         app.state.web_settings = web_settings
 
-        try:
+        if web_settings.auto_create_tables:
             from postbox.database.base import Base
 
             async with database.engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-        except Exception as e:
-            print(f"Warning: Could not auto-create tables: {e}")
 
         yield
         await database.dispose()
