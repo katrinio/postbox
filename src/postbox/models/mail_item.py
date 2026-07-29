@@ -17,6 +17,7 @@ from sqlalchemy import (
     Text,
     case,
     func,
+    or_,
     select,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -307,6 +308,7 @@ class MailItem(ActiveRecord):
         *,
         view: MailJournalFilter,
         correspondent_id: int | None = None,
+        country_code: str | None = None,
         geography: MailGeographyFilter | None = None,
         page: int = 1,
         page_size: int = 5,
@@ -318,6 +320,13 @@ class MailItem(ActiveRecord):
             conditions.append(cls.direction == MailDirection.OUTGOING)
         elif view is MailJournalFilter.INCOMING:
             conditions.append(cls.direction == MailDirection.INCOMING)
+        if country_code:
+            conditions.append(
+                or_(
+                    cls.origin_country_code == country_code,
+                    cls.destination_country_code == country_code,
+                )
+            )
         if geography is not None:
             if geography.origin_country_code:
                 conditions.append(cls.origin_country_code == geography.origin_country_code)
@@ -351,6 +360,20 @@ class MailItem(ActiveRecord):
             pages=pages,
             total=total,
         )
+
+    @classmethod
+    async def country_codes_for_owner(cls, session: AsyncSession, owner_id: int) -> list[str]:
+        origin = select(cls.origin_country_code.label("country_code")).where(
+            cls.owner_id == owner_id,
+            cls.origin_country_code.is_not(None),
+        )
+        destination = select(cls.destination_country_code.label("country_code")).where(
+            cls.owner_id == owner_id,
+            cls.destination_country_code.is_not(None),
+        )
+        countries = origin.union(destination).subquery()
+        statement = select(countries.c.country_code).order_by(countries.c.country_code)
+        return list(await session.scalars(statement))
 
     @classmethod
     async def find_for_owner(

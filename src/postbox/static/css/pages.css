@@ -1,5 +1,17 @@
 /* Layout for the server-rendered pages. Design tokens come from app.css. */
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* --- Site header / nav --- */
 
 .site-header {
@@ -202,7 +214,7 @@
 .journal-screen {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .journal-header {
@@ -224,7 +236,14 @@
   font-size: 0.9rem;
 }
 
-/* --- Filter pills --- */
+/* --- Journal filters --- */
+
+.journal-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
 
 .filter-row {
   display: flex;
@@ -253,53 +272,30 @@
   opacity: 0.7;
 }
 
-.geo-filter {
+.journal-select-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.journal-select-filters select {
+  width: auto;
+  max-width: min(240px, 100%);
+  min-height: 34px;
+  padding: 0 var(--space-5) 0 var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   background: var(--color-surface);
-}
-
-.geo-filter summary {
-  padding: var(--space-2) var(--space-3);
   color: var(--color-ink-muted);
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.geo-filter[open] summary {
-  border-bottom: 1px solid var(--color-border);
-}
-
-.geo-filter__form {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
-  padding: var(--space-3);
-}
-
-.geo-filter__form label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: 0.8rem;
-  color: var(--color-ink-muted);
-}
-
-.geo-filter__form input {
-  padding: var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  background: var(--color-canvas);
-  color: var(--color-ink);
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
-.geo-filter__actions {
-  grid-column: 1 / -1;
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
+.journal-select-filters select:focus {
+  outline: 3px solid var(--color-raspberry);
+  outline-offset: 2px;
+  border-color: transparent;
 }
 
 /* --- Journal list --- */
@@ -314,11 +310,11 @@
 
 .journal-row {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-columns: 32px minmax(0, 1fr);
   align-items: start;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-height: 0;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
   color: inherit;
   border-bottom: 1px solid var(--color-border);
 }
@@ -333,8 +329,8 @@
 
 .journal-row__icon {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -369,57 +365,57 @@
 }
 
 .journal-row__name:hover,
-.journal-row__details:hover,
-.journal-row__date:hover {
+.journal-row__details:hover {
   color: var(--color-raspberry-dark);
 }
 
 .journal-row__name:focus-visible,
-.journal-row__details:focus-visible,
-.journal-row__date:focus-visible {
+.journal-row__details:focus-visible {
   outline: 3px solid var(--color-raspberry);
   outline-offset: 3px;
 }
 
 .journal-row__details {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--space-3);
   min-width: 0;
   margin-top: 2px;
   color: inherit;
   text-decoration: none;
 }
 
-.journal-row__meta {
-  display: block;
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--color-ink-muted);
-}
-
 .journal-row__route {
   display: block;
-  margin-top: 2px;
+  min-width: 0;
+  margin-top: 0;
   font-size: 0.78rem;
   color: var(--color-ink-muted);
   overflow-wrap: anywhere;
 }
 
-.journal-row__note-indicator {
-  margin-left: var(--space-1);
-  opacity: 0.5;
+.journal-row__route-empty {
+  opacity: 0.72;
 }
 
-.journal-row__date {
-  justify-self: end;
-  font-size: 0.8rem;
+.journal-row__event {
+  display: inline-block;
   color: var(--color-ink-muted);
-  text-decoration: none;
+  font-size: 0.78rem;
   white-space: nowrap;
 }
 
-.journal-row__date time {
-  display: block;
+.journal-row__event time {
+  display: inline;
   padding-top: 0;
+  color: inherit;
+  font: inherit;
+}
+
+.journal-row__note-indicator {
+  margin-left: var(--space-1);
+  opacity: 0.5;
 }
 
 /* --- Empty state --- */
@@ -736,10 +732,22 @@
     grid-template-columns: 32px minmax(0, 1fr);
   }
 
-  .journal-row__date {
-    grid-column: 2;
-    justify-self: start;
-    white-space: normal;
+  .journal-filters {
+    align-items: stretch;
+  }
+
+  .filter-row,
+  .journal-select-filters {
+    width: 100%;
+  }
+
+  .journal-select-filters label {
+    max-width: 100%;
+  }
+
+  .journal-row__details {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
   }
 
   .detail-fields {
@@ -751,7 +759,6 @@
     gap: var(--space-2);
   }
 
-  .geo-filter__form,
   .location-grid {
     grid-template-columns: 1fr;
   }
