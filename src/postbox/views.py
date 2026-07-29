@@ -22,14 +22,12 @@ from postbox.auth.hub import HubAuthError
 from postbox.config import WebSettings
 from postbox.models import (
     Correspondent,
-    MailDeliveryError,
     MailDirection,
     MailGeographyError,
     MailGeographyFilter,
     MailItem,
     MailJournalFilter,
     MailNoteError,
-    MailStatus,
     User,
 )
 
@@ -76,11 +74,7 @@ def _format_date(value: date) -> str:
 def _format_status(item: MailItem) -> str:
     if item.direction is MailDirection.INCOMING:
         return "Получено"
-    if item.status is MailStatus.IN_TRANSIT:
-        days = item.travel_days()
-        return "В пути" if days is None else f"В пути · {days} дн."
-    days = item.travel_days()
-    return "Дошло" if days is None else f"Дошло за {days} дн."
+    return "Отправлено"
 
 
 def _format_location(city: str | None, country_code: str | None) -> str:
@@ -425,9 +419,8 @@ async def logout(request: Request, csrf_token: Annotated[str, Form()]) -> Respon
 
 JOURNAL_FILTERS = [
     ("all", "Все"),
-    ("in_transit", "В пути"),
-    ("outgoing", "Исходящие"),
-    ("incoming", "Входящие"),
+    ("outgoing", "Отправленные"),
+    ("incoming", "Полученные"),
 ]
 
 JOURNAL_PAGE_SIZE = 50
@@ -780,37 +773,6 @@ async def update_note(
     redirect = RedirectResponse(f"/mail/{mail_id}", status_code=303)
     _set_flash(redirect, "Изменения сохранены.")
     return redirect
-
-
-@router.post("/mail/{mail_id}/received")
-async def mark_received(
-    request: Request,
-    mail_id: int,
-    user_id: Annotated[int, Depends(current_user_id)],
-    session: Annotated[AsyncSession, Depends(web_session)],
-    csrf_token: Annotated[str, Form()],
-    received_date: Annotated[str, Form()] = "",
-) -> Response:
-    _verify_csrf(request, csrf_token)
-    user = await User.get(session, user_id)
-    if user is None:
-        raise NotAuthenticated
-    item = await _load_item(session, user_id, mail_id)
-
-    try:
-        recv_at = date.fromisoformat(received_date.strip()) if received_date.strip() else date.today()
-    except ValueError:
-        recv_at = date.today()
-
-    try:
-        await item.mark_received(session, received_at=recv_at)
-        await session.commit()
-    except MailDeliveryError:
-        return RedirectResponse(f"/mail/{mail_id}", status_code=303)
-
-    response = RedirectResponse("/", status_code=303)
-    _set_flash(response, "Отмечено как полученное.")
-    return response
 
 
 # --- Plumbing ---

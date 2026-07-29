@@ -41,13 +41,6 @@
         <dd>{{ format_status(item) }}</dd>
       </div>
 
-      {% if item.travel_days() is not none and item.received_at %}
-      <div class="detail-field">
-        <dt>В пути</dt>
-        <dd>{{ item.travel_days() }} дн.</dd>
-      </div>
-      {% endif %}
-
       {% set route = format_route(item) %}
       {% if route %}
       <div class="detail-field detail-field--wide">
@@ -68,14 +61,6 @@
       <a class="ghost-button" href="/mail/{{ item.id }}/edit">
         Редактировать
       </a>
-
-      {% if item.direction.value == "outgoing" and item.status.value == "in_transit" %}
-      <form method="post" action="/mail/{{ item.id }}/received" class="inline-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-        <input type="hidden" name="received_date" value="{{ today.isoformat() }}" />
-        <button class="primary-button" type="submit">Отметить полученным</button>
-      </form>
-      {% endif %}
     </div>
   </div>
 </section>

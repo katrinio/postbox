@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from postbox.models import Correspondent, MailDirection, MailItem, MailJournalFilter, MailStatus, User
+from postbox.models import Correspondent, MailDirection, MailItem, MailJournalFilter, User
 
 DATABASE_URL = os.getenv("POSTBOX_TEST_DATABASE_URL", "")
 
@@ -84,7 +84,7 @@ async def test_approve_within_limit_applies_registration_policy(session: AsyncSe
     assert await first.approve_within_limit(session, limit=2) is True
 
 
-async def test_active_record_persists_mail_and_derives_status(session: AsyncSession) -> None:
+async def test_active_record_persists_mail_and_manages_note(session: AsyncSession) -> None:
     user = await User.create(
         session,
         telegram_id=100,
@@ -103,11 +103,6 @@ async def test_active_record_persists_mail_and_derives_status(session: AsyncSess
     )
 
     assert mail.id is not None
-    assert mail.status is MailStatus.IN_TRANSIT
-
-    await mail.mark_received(session, received_at=date(2026, 7, 16))
-
-    assert mail.status is MailStatus.RECEIVED
     assert await MailItem.get(session, mail.id) is mail
 
     await mail.set_note(session, note="  First postcard  ")
@@ -145,7 +140,6 @@ async def test_incoming_mail_allows_unknown_sent_date(session: AsyncSession) -> 
 
     assert mail.sent_at is None
     assert mail.received_at == date(2026, 7, 15)
-    assert mail.status is MailStatus.RECEIVED
 
 
 async def test_direction_requires_its_known_date(session: AsyncSession) -> None:
@@ -305,18 +299,11 @@ async def test_journal_queries_are_ordered_filtered_and_private(session: AsyncSe
         page=2,
         page_size=2,
     )
-    in_transit = await MailItem.journal_page(
-        session,
-        owner.id,
-        view=MailJournalFilter.IN_TRANSIT,
-    )
 
     assert stats.total == 3
     assert stats.outgoing == 2
     assert stats.incoming == 1
-    assert stats.in_transit == 1
     assert first_page.items == [incoming, travelling]
     assert first_page.pages == 2
     assert second_page.items == [delivered]
-    assert in_transit.items == [travelling]
     assert await MailItem.find_for_owner(session, owner_id=owner.id, mail_id=private.id) is None
