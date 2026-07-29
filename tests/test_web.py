@@ -1190,3 +1190,141 @@ async def test_flash_after_create(tmp_path) -> None:
             client.cookies.update(create_resp.cookies)
             journal = await client.get("/")
     assert "Письмо добавлено" in journal.text
+
+
+# --- Correspondent detail page ---
+
+
+async def test_correspondent_detail_shows_stats_and_history(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=77)
+            user_id = _current_user_id(client)
+            await _seed_mail(
+                app,
+                user_id,
+                [
+                    {"correspondent": "Alice", "direction": "outgoing", "sent_at": today},
+                    {"correspondent": "Alice", "direction": "incoming", "received_at": today - timedelta(days=1)},
+                    {"correspondent": "Alice", "direction": "outgoing", "sent_at": today - timedelta(days=2)},
+                ],
+            )
+
+            async with app.router.lifespan_context(app), app.state.database.session_factory() as session:
+                from postbox.models import Correspondent
+
+                corr = await Correspondent.find_or_create(session, owner_id=user_id, name="Alice")
+                correspondent_id = corr.id
+
+            response = await client.get(f"/correspondent/{correspondent_id}")
+
+    assert response.status_code == 200
+    assert "Alice" in response.text
+    assert "Отправлено" in response.text
+    assert "2" in response.text
+    assert "Получено" in response.text
+    assert "1" in response.text
+
+
+async def test_correspondent_detail_other_user_returns_404(tmp_path) -> None:
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=78)
+            user_id_1 = _current_user_id(client)
+            await _seed_mail(
+                app,
+                user_id_1,
+                [{"correspondent": "Bob", "direction": "outgoing", "sent_at": date.today()}],
+            )
+
+            async with app.router.lifespan_context(app), app.state.database.session_factory() as session:
+                from postbox.models import Correspondent
+
+                corr = await Correspondent.find_or_create(session, owner_id=user_id_1, name="Bob")
+                correspondent_id = corr.id
+
+            client.cookies.clear()
+            await _login(client, telegram_id=79)
+
+            response = await client.get(f"/correspondent/{correspondent_id}")
+
+    assert response.status_code == 404
+
+
+async def test_correspondent_save_note(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=80)
+            user_id = _current_user_id(client)
+            await _seed_mail(
+                app,
+                user_id,
+                [{"correspondent": "Charlie", "direction": "outgoing", "sent_at": today}],
+            )
+
+            await client.get("/")
+            csrf = client.cookies.get("postbox_csrf")
+
+            async with app.router.lifespan_context(app), app.state.database.session_factory() as session:
+                from postbox.models import Correspondent
+
+                corr = await Correspondent.find_or_create(session, owner_id=user_id, name="Charlie")
+                correspondent_id = corr.id
+
+            response = await client.post(
+                f"/correspondent/{correspondent_id}/note",
+                data={"csrf_token": csrf, "note": "Важный контакт"},
+                follow_redirects=False,
+            )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/correspondent/{correspondent_id}"
+
+    async with app.router.lifespan_context(app), app.state.database.session_factory() as session:
+        from postbox.models import Correspondent
+
+        corr = await Correspondent.find_for_owner(session, owner_id=user_id, correspondent_id=correspondent_id)
+    assert corr is not None
+    assert corr.note == "Важный контакт"
+
+
+async def test_correspondent_save_note_requires_csrf(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=81)
+            user_id = _current_user_id(client)
+            await _seed_mail(
+                app,
+                user_id,
+                [{"correspondent": "Dave", "direction": "outgoing", "sent_at": today}],
+            )
+
+            async with app.router.lifespan_context(app), app.state.database.session_factory() as session:
+                from postbox.models import Correspondent
+
+                corr = await Correspondent.find_or_create(session, owner_id=user_id, name="Dave")
+                correspondent_id = corr.id
+
+            response = await client.post(
+                f"/correspondent/{correspondent_id}/note",
+                data={"csrf_token": "invalid", "note": "Test"},
+                follow_redirects=False,
+            )
+
+    assert response.status_code == 303
+    assert "login?error=csrf" in response.headers["location"]

@@ -867,6 +867,7 @@ async def correspondent_save_note(
 
     correspondent.note = note_text
     await correspondent.save(session)
+    await session.commit()
 
     redirect = RedirectResponse(f"/correspondent/{correspondent_id}", status_code=303)
     _set_flash(redirect, "Заметка обновлена.")
