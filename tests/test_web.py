@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, timedelta
+from html.parser import HTMLParser
 from urllib.parse import urlencode
 
 import httpx
@@ -68,6 +69,29 @@ def _current_user_id(client: httpx.AsyncClient) -> int:
     payload = decode_jwt_token(token, JWT_SECRET)
     assert payload is not None
     return int(payload["user_id"])
+
+
+class _AnchorNestingParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self._stack: list[str] = []
+        self.has_nested_anchor = False
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag == "a" and "a" in self._stack:
+            self.has_nested_anchor = True
+        self._stack.append(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self._stack:
+            index = len(self._stack) - 1 - self._stack[::-1].index(tag)
+            del self._stack[index:]
+
+
+def _has_nested_anchor(html: str) -> bool:
+    parser = _AnchorNestingParser()
+    parser.feed(html)
+    return parser.has_nested_anchor
 
 
 async def _seed_mail(app, owner_id: int, items: list[dict]) -> None:
@@ -311,6 +335,79 @@ async def test_journal_renders_mail_items(tmp_path) -> None:
     assert "Аня" in response.text
     assert "Исходящее" in response.text
     assert "Входящее" in response.text
+
+
+async def test_journal_items_are_sorted_and_have_separate_links(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=11)
+            user_id = _current_user_id(client)
+            await _seed_mail(
+                app,
+                user_id,
+                [
+                    {
+                        "correspondent": "Older Route",
+                        "direction": "outgoing",
+                        "sent_at": today - timedelta(days=7),
+                        "origin_city": "Very Long Origin City Name",
+                        "destination_city": "Very Long Destination City Name",
+                        "note": "Has note",
+                    },
+                    {"correspondent": "Newest Person", "direction": "incoming", "received_at": today},
+                ],
+            )
+
+            async with app.state.database.session_factory() as session:
+                newest = await Correspondent.find_or_create(session, owner_id=user_id, name="Newest Person")
+                newest_id = newest.id
+
+            response = await client.get("/")
+
+    assert response.status_code == 200
+    assert response.text.index("Newest Person") < response.text.index("Older Route")
+    assert f'href="/correspondent/{newest_id}"' in response.text
+    assert 'class="journal-row__details" href="/mail/' in response.text
+    assert '<a class="journal-row"' not in response.text
+    assert not _has_nested_anchor(response.text)
+
+
+async def test_journal_filters_and_pagination_keep_working(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=12)
+            user_id = _current_user_id(client)
+            await _seed_mail(
+                app,
+                user_id,
+                [
+                    *[
+                        {
+                            "correspondent": f"In {index}",
+                            "direction": "incoming",
+                            "received_at": today - timedelta(days=index),
+                        }
+                        for index in range(52)
+                    ],
+                    {"correspondent": "Out Only", "direction": "outgoing", "sent_at": today},
+                ],
+            )
+
+            page_two = await client.get("/?filter=incoming&page=2")
+
+    assert page_two.status_code == 200
+    assert "Входящее" in page_two.text
+    assert "Исходящее" not in page_two.text
+    assert 'href="/?filter=incoming&amp;page=1"' in page_two.text
+    assert 'href="/?filter=incoming&amp;page=3"' not in page_two.text
 
 
 async def test_journal_empty_state(tmp_path) -> None:
@@ -1209,9 +1306,19 @@ async def test_correspondent_detail_shows_stats_and_history(tmp_path) -> None:
                 app,
                 user_id,
                 [
-                    {"correspondent": "Alice", "direction": "outgoing", "sent_at": today},
-                    {"correspondent": "Alice", "direction": "incoming", "received_at": today - timedelta(days=1)},
-                    {"correspondent": "Alice", "direction": "outgoing", "sent_at": today - timedelta(days=2)},
+                    {"correspondent": "Alice", "direction": "outgoing", "sent_at": today, "origin_city": "Newest"},
+                    {
+                        "correspondent": "Alice",
+                        "direction": "incoming",
+                        "received_at": today - timedelta(days=1),
+                        "origin_city": "Middle",
+                    },
+                    {
+                        "correspondent": "Alice",
+                        "direction": "outgoing",
+                        "sent_at": today - timedelta(days=2),
+                        "origin_city": "Oldest",
+                    },
                 ],
             )
 
@@ -1229,6 +1336,10 @@ async def test_correspondent_detail_shows_stats_and_history(tmp_path) -> None:
     assert "2" in response.text
     assert "Получено" in response.text
     assert "1" in response.text
+    assert response.text.index("Newest") < response.text.index("Middle") < response.text.index("Oldest")
+    assert 'class="journal-row__name"' not in response.text
+    assert 'class="journal-row__details" href="/mail/' in response.text
+    assert not _has_nested_anchor(response.text)
 
 
 async def test_correspondent_detail_other_user_returns_404(tmp_path) -> None:

@@ -38,6 +38,7 @@
     <h2>История переписки</h2>
     <div class="journal-list">
       {% for item in journal.items %}
+      {% set show_correspondent = false %}
       {% include "_mail_journal_item.html" %}
       {% endfor %}
     </div>
