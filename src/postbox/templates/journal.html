@@ -16,58 +16,40 @@
   <div class="flash-message" role="status">{{ flash }}</div>
   {% endif %}
 
-  {% if correspondents %}
-  <form method="get" action="/" class="correspondent-filter">
-    <select name="correspondent_id" onchange="this.form.submit()">
-      <option value="">Все корреспонденты</option>
-      {% for c in correspondents %}
-      <option value="{{ c.id }}" {% if correspondent_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+  <div class="journal-filters">
+    <nav class="filter-row" aria-label="Фильтры направления">
+      {% for fid, flabel in filters %}
+      <a
+        class="filter-pill{% if current_filter == fid %} filter-pill--active{% endif %}"
+        href="{{ journal_url(filter_value=fid, correspondent_id=correspondent_id, country=country) }}"
+        {% if current_filter == fid %}aria-current="page"{% endif %}
+      >{{ flabel }}{% if fid == "all" and stats.total %} <span class="filter-pill__count">{{ stats.total }}</span>{% elif fid == "outgoing" and stats.outgoing %} <span class="filter-pill__count">{{ stats.outgoing }}</span>{% elif fid == "incoming" and stats.incoming %} <span class="filter-pill__count">{{ stats.incoming }}</span>{% endif %}</a>
       {% endfor %}
-    </select>
-    <input type="hidden" name="filter" value="{{ current_filter }}" />
-    {% if geography_filter.origin_country_code %}<input type="hidden" name="origin_country" value="{{ geography_filter.origin_country_code }}" />{% endif %}
-    {% if geography_filter.destination_country_code %}<input type="hidden" name="destination_country" value="{{ geography_filter.destination_country_code }}" />{% endif %}
-    {% if geography_filter.origin_city %}<input type="hidden" name="origin_city" value="{{ geography_filter.origin_city }}" />{% endif %}
-    {% if geography_filter.destination_city %}<input type="hidden" name="destination_city" value="{{ geography_filter.destination_city }}" />{% endif %}
-  </form>
-  {% endif %}
+    </nav>
 
-  <nav class="filter-row" aria-label="Фильтры журнала">
-    {% for fid, flabel in filters %}
-    <a
-      class="filter-pill{% if current_filter == fid %} filter-pill--active{% endif %}"
-      href="{{ journal_url(filter_value=fid, correspondent_id=correspondent_id, geography=geography_filter) }}"
-      {% if current_filter == fid %}aria-current="page"{% endif %}
-    >{{ flabel }}{% if fid == "all" and stats.total %} <span class="filter-pill__count">{{ stats.total }}</span>{% elif fid == "outgoing" and stats.outgoing %} <span class="filter-pill__count">{{ stats.outgoing }}</span>{% elif fid == "incoming" and stats.incoming %} <span class="filter-pill__count">{{ stats.incoming }}</span>{% endif %}</a>
-    {% endfor %}
-  </nav>
-
-  <details class="geo-filter"{% if geography_filter.has_filters %} open{% endif %}>
-    <summary>Места{% if geography_filter.has_filters %} · фильтр включён{% endif %}</summary>
-    <form class="geo-filter__form" method="get" action="/">
+    <form method="get" action="/" class="journal-select-filters">
       <input type="hidden" name="filter" value="{{ current_filter }}" />
       <label>
-        <span>Откуда страна</span>
-        <input type="text" name="origin_country" value="{{ geography_filter.origin_country_code or '' }}" placeholder="DE" maxlength="2" inputmode="latin" autocapitalize="characters" />
+        <span class="sr-only">Корреспондент</span>
+        <select name="correspondent_id" onchange="this.form.submit()">
+          <option value="">Все корреспонденты</option>
+          {% for c in correspondents %}
+          <option value="{{ c.id }}" {% if correspondent_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+          {% endfor %}
+        </select>
       </label>
+
       <label>
-        <span>Куда страна</span>
-        <input type="text" name="destination_country" value="{{ geography_filter.destination_country_code or '' }}" placeholder="FR" maxlength="2" inputmode="latin" autocapitalize="characters" />
+        <span class="sr-only">Страна</span>
+        <select name="country" onchange="this.form.submit()">
+          <option value="">Все страны</option>
+          {% for code in countries %}
+          <option value="{{ code }}" {% if country == code %}selected{% endif %}>{{ code }}</option>
+          {% endfor %}
+        </select>
       </label>
-      <label>
-        <span>Откуда город</span>
-        <input type="text" name="origin_city" value="{{ geography_filter.origin_city or '' }}" placeholder="Берлин" />
-      </label>
-      <label>
-        <span>Куда город</span>
-        <input type="text" name="destination_city" value="{{ geography_filter.destination_city or '' }}" placeholder="Париж" />
-      </label>
-      <div class="geo-filter__actions">
-        <button class="ghost-button ghost-button--sm" type="submit">Применить</button>
-        <a class="ghost-button ghost-button--sm" href="{{ journal_url(filter_value=current_filter, correspondent_id=correspondent_id) }}">Сбросить места</a>
-      </div>
     </form>
-  </details>
+  </div>
 
   {% if journal.items %}
   <div class="journal-list">
@@ -80,11 +62,11 @@
   {% if journal.pages > 1 %}
   <nav class="pagination" aria-label="Страницы журнала">
     {% if journal.page > 1 %}
-    <a class="pagination__link" href="{{ journal_url(filter_value=current_filter, correspondent_id=correspondent_id, geography=geography_filter, page=journal.page - 1) }}">&larr; Назад</a>
+    <a class="pagination__link" href="{{ journal_url(filter_value=current_filter, correspondent_id=correspondent_id, country=country, page=journal.page - 1) }}">&larr; Назад</a>
     {% endif %}
     <span class="pagination__info">{{ journal.page }} / {{ journal.pages }}</span>
     {% if journal.page < journal.pages %}
-    <a class="pagination__link" href="{{ journal_url(filter_value=current_filter, correspondent_id=correspondent_id, geography=geography_filter, page=journal.page + 1) }}">Вперёд &rarr;</a>
+    <a class="pagination__link" href="{{ journal_url(filter_value=current_filter, correspondent_id=correspondent_id, country=country, page=journal.page + 1) }}">Вперёд &rarr;</a>
     {% endif %}
   </nav>
   {% endif %}
@@ -93,9 +75,9 @@
 
   <div class="empty-state">
     <svg class="empty-state__icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
-    {% if geography_filter.has_filters %}
-    <p class="empty-state__title">По этим местам писем нет</p>
-    <p class="empty-state__text"><a href="/?filter={{ current_filter }}">Сбросить фильтр мест</a></p>
+    {% if country %}
+    <p class="empty-state__title">По этой стране писем нет</p>
+    <p class="empty-state__text"><a href="{{ journal_url(filter_value=current_filter, correspondent_id=correspondent_id) }}">Сбросить страну</a></p>
     {% elif current_filter == "all" %}
     <p class="empty-state__title">Журнал пока пуст</p>
     <p class="empty-state__text">Добавьте первое отправленное или полученное письмо, чтобы начать журнал.</p>

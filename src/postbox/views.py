@@ -24,7 +24,6 @@ from postbox.models import (
     Correspondent,
     MailDirection,
     MailGeographyError,
-    MailGeographyFilter,
     MailItem,
     MailJournalFilter,
     MailNoteError,
@@ -95,20 +94,13 @@ def _journal_url(
     filter_value: str = "all",
     correspondent_id: int | None = None,
     page: int | None = None,
-    geography: MailGeographyFilter | None = None,
+    country: str | None = None,
 ) -> str:
     params: dict[str, str | int] = {"filter": filter_value}
     if correspondent_id is not None:
         params["correspondent_id"] = correspondent_id
-    if geography:
-        if geography.origin_country_code:
-            params["origin_country"] = geography.origin_country_code
-        if geography.destination_country_code:
-            params["destination_country"] = geography.destination_country_code
-        if geography.origin_city:
-            params["origin_city"] = geography.origin_city
-        if geography.destination_city:
-            params["destination_city"] = geography.destination_city
+    if country:
+        params["country"] = country
     if page is not None:
         params["page"] = page
     return f"/?{urlencode(params)}"
@@ -220,16 +212,14 @@ def _geography_values_from_item(item: MailItem) -> dict[str, str]:
     }
 
 
-def _parse_geography_filter(request: Request) -> MailGeographyFilter:
+def _parse_country_filter(request: Request, available_countries: list[str]) -> str | None:
     try:
-        return MailItem.normalize_geography_filter(
-            origin_country=request.query_params.get("origin_country"),
-            origin_city=request.query_params.get("origin_city"),
-            destination_country=request.query_params.get("destination_country"),
-            destination_city=request.query_params.get("destination_city"),
-        )
+        country = MailItem.normalize_country_code(request.query_params.get("country"))
     except MailGeographyError:
-        return MailGeographyFilter()
+        return None
+    if country not in set(available_countries):
+        return None
+    return country
 
 
 def _validate_geography_form(
@@ -452,6 +442,9 @@ async def home(
     except ValueError, TypeError:
         page = 1
 
+    correspondents = await Correspondent.for_owner(session, user_id)
+    available_correspondent_ids = {correspondent.id for correspondent in correspondents}
+
     correspondent_id_param = request.query_params.get("correspondent_id")
     correspondent_id: int | None = None
     if correspondent_id_param:
@@ -459,20 +452,22 @@ async def home(
             correspondent_id = int(correspondent_id_param)
         except ValueError, TypeError:
             correspondent_id = None
+    if correspondent_id not in available_correspondent_ids:
+        correspondent_id = None
 
-    geography_filter = _parse_geography_filter(request)
+    countries = await MailItem.country_codes_for_owner(session, user_id)
+    country = _parse_country_filter(request, countries)
 
     journal = await MailItem.journal_page(
         session,
         user_id,
         view=view,
         correspondent_id=correspondent_id,
-        geography=geography_filter,
+        country_code=country,
         page=page,
         page_size=JOURNAL_PAGE_SIZE,
     )
     stats = await MailItem.journal_stats(session, user_id)
-    correspondents = await Correspondent.for_owner(session, user_id)
     csrf = _csrf_token(request)
     raw_flash = request.cookies.get(FLASH_COOKIE)
     flash = unquote(raw_flash) if raw_flash else None
@@ -487,7 +482,8 @@ async def home(
             "current_filter": view.value,
             "correspondents": correspondents,
             "correspondent_id": correspondent_id,
-            "geography_filter": geography_filter,
+            "countries": countries,
+            "country": country,
             "csrf_token": csrf,
             "flash": flash,
             "today": date.today(),
