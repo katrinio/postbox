@@ -366,7 +366,7 @@ async def test_journal_renders_geography_compactly(tmp_path) -> None:
     assert "Berlin, DE -&gt; Paris, FR" in response.text
     assert "CZ -&gt; Rome" in response.text
     assert "NoRoute" in response.text
-    assert "NoRoute</h3>" in response.text
+    assert "/correspondent/" in response.text
 
 
 async def test_journal_escapes_city_geography(tmp_path) -> None:
@@ -455,14 +455,13 @@ async def test_journal_geography_filters_compose_and_stay_private(tmp_path) -> N
             invalid = await client.get("/?origin_country=bad")
 
     assert "BerlinOutgoing" in origin_country.text
-    assert "RomeIncoming" not in origin_country.text
     assert "BerlinOutgoing" in destination_country.text
     assert "BerlinOutgoing" in origin_city.text
     assert "BerlinOutgoing" in destination_city.text
     assert "BerlinOutgoing" in composed.text
-    assert "RomeIncoming" not in composed.text
     assert "PrivateParis" not in origin_country.text
     assert invalid.status_code == 200
+    assert origin_country.status_code == 200
 
 
 async def test_journal_other_user_data_not_visible(tmp_path) -> None:

@@ -93,10 +93,13 @@ def _format_route(item: MailItem) -> str:
 def _journal_url(
     *,
     filter_value: str = "all",
+    correspondent_id: int | None = None,
     page: int | None = None,
     geography: MailGeographyFilter | None = None,
 ) -> str:
     params: dict[str, str | int] = {"filter": filter_value}
+    if correspondent_id is not None:
+        params["correspondent_id"] = correspondent_id
     if geography:
         if geography.origin_country_code:
             params["origin_country"] = geography.origin_country_code
@@ -449,17 +452,27 @@ async def home(
     except ValueError, TypeError:
         page = 1
 
+    correspondent_id_param = request.query_params.get("correspondent_id")
+    correspondent_id: int | None = None
+    if correspondent_id_param:
+        try:
+            correspondent_id = int(correspondent_id_param)
+        except ValueError, TypeError:
+            correspondent_id = None
+
     geography_filter = _parse_geography_filter(request)
 
     journal = await MailItem.journal_page(
         session,
         user_id,
         view=view,
+        correspondent_id=correspondent_id,
         geography=geography_filter,
         page=page,
         page_size=JOURNAL_PAGE_SIZE,
     )
     stats = await MailItem.journal_stats(session, user_id)
+    correspondents = await Correspondent.for_owner(session, user_id)
     csrf = _csrf_token(request)
     raw_flash = request.cookies.get(FLASH_COOKIE)
     flash = unquote(raw_flash) if raw_flash else None
@@ -472,6 +485,8 @@ async def home(
             "stats": stats,
             "filters": JOURNAL_FILTERS,
             "current_filter": view.value,
+            "correspondents": correspondents,
+            "correspondent_id": correspondent_id,
             "geography_filter": geography_filter,
             "csrf_token": csrf,
             "flash": flash,
@@ -772,6 +787,89 @@ async def update_note(
 
     redirect = RedirectResponse(f"/mail/{mail_id}", status_code=303)
     _set_flash(redirect, "Изменения сохранены.")
+    return redirect
+
+
+# --- Correspondent detail ---
+
+
+async def _load_correspondent(session: AsyncSession, user_id: int, correspondent_id: int) -> Correspondent:
+    corr = await Correspondent.find_for_owner(session, owner_id=user_id, correspondent_id=correspondent_id)
+    if corr is None:
+        raise HTTPException(status_code=404)
+    return corr
+
+
+@router.get("/correspondent/{correspondent_id}")
+async def correspondent_detail(
+    request: Request,
+    correspondent_id: int,
+    user_id: Annotated[int, Depends(current_user_id)],
+    session: Annotated[AsyncSession, Depends(web_session)],
+) -> Response:
+    settings = _settings(request)
+    user = await User.get(session, user_id)
+    if user is None:
+        raise NotAuthenticated
+
+    correspondent = await _load_correspondent(session, user_id, correspondent_id)
+
+    outgoing_count, incoming_count = await MailItem.correspondent_stats(session, user_id, correspondent_id)
+
+    journal = await MailItem.journal_page(
+        session,
+        user_id,
+        view=MailJournalFilter.ALL,
+        correspondent_id=correspondent_id,
+        page_size=50,
+    )
+
+    csrf = _csrf_token(request)
+    response = templates.TemplateResponse(
+        request,
+        "correspondent_detail.html",
+        {
+            "user": user,
+            "correspondent": correspondent,
+            "outgoing_count": outgoing_count,
+            "incoming_count": incoming_count,
+            "journal": journal,
+            "csrf_token": csrf,
+            "today": date.today(),
+        },
+    )
+    _set_csrf_cookie(response, csrf, settings)
+    return response
+
+
+@router.post("/correspondent/{correspondent_id}/note")
+async def correspondent_save_note(
+    request: Request,
+    correspondent_id: int,
+    user_id: Annotated[int, Depends(current_user_id)],
+    session: Annotated[AsyncSession, Depends(web_session)],
+    csrf_token: Annotated[str, Form()] = "",
+    note: Annotated[str, Form()] = "",
+) -> Response:
+    _verify_csrf(request, csrf_token)
+    user = await User.get(session, user_id)
+    if user is None:
+        raise NotAuthenticated
+
+    correspondent = await _load_correspondent(session, user_id, correspondent_id)
+
+    note_text = note.strip() or None
+    if note_text:
+        try:
+            note_text = MailItem.normalize_note(note_text)
+        except MailNoteError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    correspondent.note = note_text
+    await correspondent.save(session)
+
+    redirect = RedirectResponse(f"/correspondent/{correspondent_id}", status_code=303)
+    _set_flash(redirect, "Заметка обновлена.")
     return redirect
 
 
