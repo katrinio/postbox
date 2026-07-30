@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Корреспонденты — Postbox{% endblock %}
+{% block title %}Адресная — Postbox{% endblock %}
 
 {% block content %}
 <section class="correspondents-screen" aria-labelledby="correspondents-title">
   <div class="correspondents-header">
-    <h1 id="correspondents-title">Корреспонденты</h1>
+    <h1 id="correspondents-title">Адресная</h1>
     <p class="correspondents-subtitle">Люди, с которыми уже есть письма в Postbox.</p>
   </div>
 
@@ -23,7 +23,7 @@
   </div>
   {% else %}
   <div class="empty-state">
-    <p class="empty-state__title">Корреспондентов пока нет</p>
+    <p class="empty-state__title">Адресная пока пуста</p>
     <p class="empty-state__text">Они появятся здесь после добавления письма.</p>
   </div>
   {% endif %}

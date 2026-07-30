@@ -1323,7 +1323,7 @@ async def test_top_navigation_links_journal_and_correspondents(tmp_path) -> None
 
     assert 'href="/correspondents"' in journal.text
     assert 'href="/"' in correspondents.text
-    assert "Корреспонденты" in journal.text
+    assert "Адресная" in journal.text
     assert "Журнал" in correspondents.text
 
 
@@ -1387,7 +1387,7 @@ async def test_correspondents_empty_state(tmp_path) -> None:
         response = await client.get("/correspondents")
 
     assert response.status_code == 200
-    assert "Корреспондентов пока нет" in response.text
+    assert "Адресная пока пуста" in response.text
     assert "Они появятся здесь после добавления письма" in response.text
 
 
@@ -1429,7 +1429,7 @@ async def test_correspondent_detail_shows_stats_and_history(tmp_path) -> None:
             response = await client.get(f"/correspondent/{correspondent_id}")
 
     assert response.status_code == 200
-    assert 'href="/correspondents">← Корреспонденты' in response.text
+    assert 'href="/correspondents">← Адресная' in response.text
     assert "Alice" in response.text
     assert 'aria-label="Отправлено: 2">↗ 2' in response.text
     assert 'aria-label="Получено: 1">↙ 1' in response.text
