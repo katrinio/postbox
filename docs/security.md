@@ -2,14 +2,15 @@
 
 ## Trust Model
 
-Postbox authenticates users through The Hub Bot. The authentication chain is:
+Postbox authenticates users either directly through Telegram Login or through The Hub Bot.
+Both paths create the same local application session:
 
 ```
-Telegram account (verified by The Hub Bot)
-    ↓ (Hub Bot creates signed JWT)
-The Hub Bot issues JWT with telegram_id
-    ↓ (Postbox verifies Hub JWT signature)
-Postbox extracts and validates telegram_id
+Telegram account
+    ↓
+Telegram Login Widget OR The Hub Bot JWT
+    ↓
+Postbox verifies Telegram signature OR Hub JWT signature
     ↓ (local session creation)
 Postbox application session (JWT in HttpOnly cookie)
     ↓ (authorization checks)
@@ -18,8 +19,8 @@ User data (ownership validation)
 
 ### Components
 
-1. **Hub JWT verification** — server validates HMAC signature of Hub token with shared secret
-2. **Telegram identity** — extracted from verified Hub JWT (not self-reported)
+1. **Telegram Login verification** — server validates the official Login Widget HMAC with `POSTBOX_BOT_TOKEN`
+2. **Hub JWT verification** — server validates HMAC signature of Hub token with shared secret
 3. **HTTPS only** — all authentication happens over encrypted connections
 4. **Application session** — stateless JWT stored in secure HttpOnly cookie
 5. **CSRF protection** — double-submit cookie for state-changing requests
@@ -27,7 +28,27 @@ User data (ownership validation)
 
 ---
 
-## 1. Hub Bot Authentication
+## 1. Direct Telegram Login
+
+### How it works
+
+1. User opens `/login`
+2. Telegram Login Widget redirects to `/auth/telegram` with signed fields
+3. Postbox rejects unexpected, duplicate, missing, stale, or tampered parameters
+4. Postbox verifies the Telegram signature with `POSTBOX_BOT_TOKEN`
+5. Postbox finds or creates the user by Telegram ID
+6. Postbox creates local JWT session
+
+### Security properties
+
+- **Signature verification**: Telegram Login HMAC is verified server-side
+- **Secret isolation**: `POSTBOX_BOT_TOKEN` is never sent to templates or frontend
+- **Replay window**: stale `auth_date` values are rejected
+- **Constant-time comparison**: signature comparison uses `compare_digest`
+
+---
+
+## 2. Hub Bot Authentication
 
 ### How it works
 
@@ -54,8 +75,10 @@ Required environment variables:
 
 ```bash
 HUB_AUTH_SECRET=<shared-secret-with-hub-bot>  # Must match The Hub Bot
+HUB_BOT_URL=https://t.me/<hub-bot>
+POSTBOX_BOT_TOKEN=<telegram-bot-token>
+POSTBOX_BOT_USERNAME=<telegram-bot-username>
 POSTBOX_JWT_SECRET_KEY=<strong-random-secret> # For session JWT
-POSTBOX_PUBLIC_URL=https://postbox.example.com
 ```
 
 ### Dev bypass (development only)
@@ -66,7 +89,7 @@ When `POSTBOX_DEV_LOGIN=true`, a test form accepts `telegram_id + first_name` wi
 
 ---
 
-## 2. Application Session (JWT)
+## 3. Application Session (JWT)
 
 ### Structure
 

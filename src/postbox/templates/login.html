@@ -13,10 +13,27 @@
     <p class="auth-error" role="alert">{{ error }}</p>
     {% endif %}
 
-    {% if not dev_login %}
-    <p class="auth-note">
-      Доступ к приложению осуществляется через The Hub Bot.
-    </p>
+    {% if telegram_login_enabled %}
+    <div class="auth-widget" aria-label="Вход через Telegram">
+      <script
+        async
+        src="https://telegram.org/js/telegram-widget.js?22"
+        data-telegram-login="{{ telegram_bot_username }}"
+        data-size="large"
+        data-auth-url="/auth/telegram"
+        data-request-access="write"
+      ></script>
+    </div>
+    {% else %}
+    <p class="auth-note">Вход через Telegram пока недоступен.</p>
+    {% endif %}
+
+    {% if hub_bot_url %}
+    <div class="auth-divider">или</div>
+    <a class="ghost-button auth-hub-button" href="{{ hub_bot_url }}" rel="noopener noreferrer">Открыть The Hub Bot</a>
+    <p class="auth-note">Через Hub Bot также доступны другие приложения.</p>
+    {% elif not telegram_login_enabled %}
+    <p class="auth-note">Попросите владельца приложения настроить способ входа.</p>
     {% endif %}
 
     {% if dev_login %}

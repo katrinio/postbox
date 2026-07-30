@@ -172,6 +172,26 @@
   min-height: 48px;
 }
 
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-ink-muted);
+  font-size: 0.85rem;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.auth-hub-button {
+  align-self: stretch;
+}
+
 .auth-form {
   display: flex;
   flex-direction: column;

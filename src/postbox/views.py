@@ -17,8 +17,9 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import RedirectResponse, Response
 
-from postbox.auth import create_jwt_token, decode_jwt_token, verify_hub_token
+from postbox.auth import create_jwt_token, decode_jwt_token, verify_hub_token, verify_telegram_login
 from postbox.auth.hub import HubAuthError
+from postbox.auth.telegram import TelegramAuthError
 from postbox.config import WebSettings
 from postbox.models import (
     Correspondent,
@@ -267,12 +268,29 @@ def _pop_flash(request: Request, response: Response) -> str | None:
     return None
 
 
+def _telegram_login_configured(settings: WebSettings) -> bool:
+    return bool(settings.telegram_bot_token and settings.telegram_bot_username)
+
+
+def _log_incomplete_telegram_login_config(settings: WebSettings) -> None:
+    missing = []
+    if not settings.telegram_bot_token:
+        missing.append(WebSettings.TELEGRAM_BOT_TOKEN_VARIABLE)
+    if not settings.telegram_bot_username:
+        missing.append(WebSettings.TELEGRAM_BOT_USERNAME_VARIABLE)
+    if missing:
+        logger.warning("Telegram Login is disabled; missing config: %s", ", ".join(missing))
+
+
 # --- Auth routes ---
 
 
 @router.get("/login")
 async def login_page(request: Request) -> Response:
     settings = _settings(request)
+    telegram_login_enabled = _telegram_login_configured(settings)
+    if not telegram_login_enabled:
+        _log_incomplete_telegram_login_config(settings)
     csrf = _csrf_token(request)
     code = request.query_params.get("error")
     response = templates.TemplateResponse(
@@ -282,10 +300,41 @@ async def login_page(request: Request) -> Response:
             "dev_login": settings.dev_login,
             "csrf_token": csrf,
             "error": LOGIN_ERRORS.get(code) if code else None,
+            "telegram_login_enabled": telegram_login_enabled,
+            "telegram_bot_username": settings.telegram_bot_username if telegram_login_enabled else None,
+            "hub_bot_url": settings.hub_bot_url,
         },
     )
     _set_csrf_cookie(response, csrf, settings)
     return response
+
+
+@router.get("/auth/telegram")
+async def telegram_auth_callback(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(web_session)],
+) -> Response:
+    """Telegram Login Widget redirect callback."""
+    settings = _settings(request)
+    if not _telegram_login_configured(settings):
+        _log_incomplete_telegram_login_config(settings)
+        return RedirectResponse("/login?error=unconfigured", status_code=303)
+
+    try:
+        identity = verify_telegram_login(request.query_params.multi_items(), settings.telegram_bot_token or "")
+    except TelegramAuthError as e:
+        logger.warning("Telegram login verification failed: %s", type(e).__name__)
+        return RedirectResponse("/login?error=signature", status_code=303)
+
+    return await _login_user(
+        session,
+        settings,
+        telegram_id=identity.telegram_id,
+        first_name=identity.first_name,
+        username=identity.username,
+        last_name=identity.last_name,
+        language_code=None,
+    )
 
 
 @router.get("/auth/hub")

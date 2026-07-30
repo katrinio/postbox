@@ -10,8 +10,7 @@
 poetry install
 ```
 
-Create a bot with [BotFather](https://t.me/BotFather), copy the example settings,
-and put the token in the local `.env` file:
+Copy the example settings and fill in the local `.env` file:
 
 ```bash
 cp .env.example .env
@@ -20,11 +19,10 @@ cp .env.example .env
 Postbox loads `.env` from the current working directory. Existing process
 environment variables take priority over values from the file.
 
-`POSTBOX_LOG_LEVEL` is optional and defaults to `INFO`.
-
-For the local web API, set `POSTBOX_WEB_OWNER_TELEGRAM_ID` to the Telegram ID
-of the journal owner. This is a temporary local-only owner selection until web
-authentication is implemented.
+For direct Telegram Login, create a bot with [BotFather](https://t.me/BotFather)
+and set `POSTBOX_BOT_TOKEN` plus `POSTBOX_BOT_USERNAME`. Register the local or
+production domain with BotFather before testing the official Login Widget.
+`HUB_BOT_URL` is optional and controls the "Open The Hub Bot" link on the login page.
 
 Create the schema before the first run and after pulling new migrations:
 
