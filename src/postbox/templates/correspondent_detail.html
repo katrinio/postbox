@@ -32,10 +32,10 @@
       <button class="icon-button" type="button" aria-label="Редактировать заметку" data-note-edit>✎</button>
     </div>
 
-    <form class="correspondent-note__form" method="post" novalidate {% if not edit_note %}hidden{% endif %}>
+    <form class="correspondent-note__form" method="post" action="/correspondent/{{ correspondent.id }}/note" novalidate {% if not edit_note %}hidden{% endif %}>
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
       <div class="correspondent-note__editor">
-        <textarea name="note" rows="4" maxlength="250" aria-describedby="correspondent-note-counter{% if note_error %} correspondent-note-error{% endif %}">{{ note_value }}</textarea>
+        <textarea name="note" rows="4" maxlength="250" aria-label="Заметка" aria-describedby="correspondent-note-counter{% if note_error %} correspondent-note-error{% endif %}">{{ note_value }}</textarea>
         <span class="correspondent-note__counter" id="correspondent-note-counter" data-note-counter>0 / 250</span>
       </div>
       {% if note_error %}<p class="field-error" id="correspondent-note-error">{{ note_error }}</p>{% endif %}
@@ -46,10 +46,10 @@
     </form>
 
     <noscript>
-      <form class="correspondent-note__form" method="post" novalidate>
+      <form class="correspondent-note__form" method="post" action="/correspondent/{{ correspondent.id }}/note" novalidate>
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
         <div class="correspondent-note__editor">
-          <textarea name="note" rows="4" maxlength="250">{{ note_value }}</textarea>
+          <textarea name="note" rows="4" maxlength="250" aria-label="Заметка">{{ note_value }}</textarea>
           <span class="correspondent-note__counter">{{ note_value|length }} / 250</span>
         </div>
         <div class="correspondent-note__actions">
@@ -99,6 +99,7 @@
     var cancel = root.querySelector("[data-note-cancel]");
     var textarea = root.querySelector("textarea");
     var counter = root.querySelector("[data-note-counter]");
+    var submit = form ? form.querySelector('button[type="submit"]') : null;
     var initialValue = textarea ? textarea.value : "";
     var limit = 250;
 
@@ -126,6 +127,11 @@
     if (edit) edit.addEventListener("click", showForm);
     if (cancel) cancel.addEventListener("click", hideForm);
     if (textarea) textarea.addEventListener("input", updateCounter);
+    if (form && submit) {
+      form.addEventListener("submit", function () {
+        submit.disabled = true;
+      });
+    }
     updateCounter();
   })();
 </script>

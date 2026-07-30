@@ -1587,6 +1587,38 @@ async def test_correspondent_detail_shows_stats_and_history(tmp_path) -> None:
     assert not _has_nested_anchor(response.text)
 
 
+async def test_correspondent_detail_shows_existing_note_safely(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=177)
+            user_id = _current_user_id(client)
+            await _seed_mail(app, user_id, [{"correspondent": "SafeNote", "direction": "outgoing", "sent_at": today}])
+            async with app.state.database.session_factory() as session:
+                corr = await Correspondent.find_for_owner(session, owner_id=user_id, correspondent_id=1)
+                if corr is None:
+                    corr = await Correspondent.find_or_create(session, owner_id=user_id, name="SafeNote")
+                correspondent_id = corr.id
+                corr.note = "Любит архитектуру.\n<script>alert('x')</script>"
+                await corr.save(session)
+                await session.commit()
+
+            response = await client.get(f"/correspondent/{correspondent_id}")
+
+    assert response.status_code == 200
+    assert "Любит архитектуру." in response.text
+    assert "<script>alert('x')</script>" not in response.text
+    assert "&lt;script&gt;" in response.text
+    assert 'class="correspondent-note__text"' in response.text
+    assert "<textarea disabled" not in response.text
+    assert 'aria-label="Редактировать заметку"' in response.text
+    assert f'action="/correspondent/{correspondent_id}/note"' in response.text
+    assert 'method="post"' in response.text
+
+
 async def test_correspondent_detail_other_user_returns_404(tmp_path) -> None:
     settings = build_settings(tmp_path)
     app = create_app(settings)
@@ -1670,6 +1702,40 @@ async def test_correspondent_save_note(tmp_path) -> None:
             saved = await client.get(f"/correspondent/{correspondent_id}")
     assert "Важный контакт" in saved.text
     assert "Заметки пока нет" not in saved.text
+
+
+async def test_correspondent_update_existing_note(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=180)
+            user_id = _current_user_id(client)
+            await _seed_mail(app, user_id, [{"correspondent": "UpdateNote", "direction": "outgoing", "sent_at": today}])
+            await client.get("/")
+            csrf = client.cookies.get("postbox_csrf")
+
+            async with app.state.database.session_factory() as session:
+                corr = await Correspondent.find_or_create(session, owner_id=user_id, name="UpdateNote")
+                correspondent_id = corr.id
+                corr.note = "Old note"
+                await corr.save(session)
+                await session.commit()
+
+            response = await client.post(
+                f"/correspondent/{correspondent_id}/note",
+                data={"csrf_token": csrf, "note": "New note"},
+                follow_redirects=False,
+            )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/correspondent/{correspondent_id}"
+    async with app.router.lifespan_context(app), app.state.database.session_factory() as session:
+        corr = await Correspondent.find_for_owner(session, owner_id=user_id, correspondent_id=correspondent_id)
+    assert corr is not None
+    assert corr.note == "New note"
 
 
 async def test_correspondent_save_empty_note_sets_null(tmp_path) -> None:
