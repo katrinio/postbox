@@ -7,16 +7,17 @@
   <section class="auth-card" aria-labelledby="auth-title">
     <p class="eyebrow">Postbox</p>
     <h1 id="auth-title">Личный журнал бумажных писем</h1>
-    <p class="auth-lead">Войдите через Telegram, чтобы открыть свой журнал.</p>
+    <p class="auth-lead">Войдите через The Hub Bot, чтобы открыть свой журнал.</p>
 
     {% if error %}
     <p class="auth-error" role="alert">{{ error }}</p>
     {% endif %}
 
-    {% if not dev_login %}
-    <p class="auth-note">
-      Доступ к приложению осуществляется через The Hub Bot.
-    </p>
+    {% if hub_bot_url %}
+    <a class="primary-button auth-hub-button" href="{{ hub_bot_url }}" rel="noopener noreferrer">Войти через The Hub Bot</a>
+    <p class="auth-note">Через Hub Bot также доступны другие приложения.</p>
+    {% else %}
+    <p class="auth-note">Вход через The Hub Bot пока не настроен.</p>
     {% endif %}
 
     {% if dev_login %}

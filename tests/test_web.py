@@ -124,7 +124,33 @@ async def test_get_login_returns_html(tmp_path) -> None:
         response = await client.get("/login")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
-    assert "The Hub" in response.text
+    assert "Вход через The Hub Bot пока не настроен" in response.text
+
+
+async def test_login_shows_hub_bot_link_when_configured(tmp_path) -> None:
+    settings = build_settings(tmp_path, hub_bot_url="https://t.me/hub_test_bot?start=postbox")
+    async with app_client(settings) as client:
+        response = await client.get("/login")
+    assert response.status_code == 200
+    assert "telegram-widget.js" not in response.text
+    assert 'href="https://t.me/hub_test_bot?start=postbox"' in response.text
+    assert "Войти через The Hub Bot" in response.text
+
+
+async def test_login_handles_missing_hub_bot_link(tmp_path) -> None:
+    settings = build_settings(tmp_path, hub_bot_url=None)
+    async with app_client(settings) as client:
+        response = await client.get("/login")
+    assert response.status_code == 200
+    assert "telegram-widget.js" not in response.text
+    assert "Вход через The Hub Bot пока не настроен" in response.text
+
+
+async def test_direct_telegram_auth_route_is_not_available(tmp_path) -> None:
+    settings = build_settings(tmp_path)
+    async with app_client(settings) as client:
+        response = await client.get("/auth/telegram")
+    assert response.status_code == 404
 
 
 async def test_static_css_is_served(tmp_path) -> None:

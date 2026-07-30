@@ -166,10 +166,8 @@
   font-weight: 400;
 }
 
-.auth-widget {
-  display: flex;
-  justify-content: center;
-  min-height: 48px;
+.auth-hub-button {
+  align-self: stretch;
 }
 
 .auth-form {

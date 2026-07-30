@@ -42,3 +42,13 @@ def test_web_settings_defaults_registration_limit(monkeypatch: pytest.MonkeyPatc
     settings = WebSettings.from_env()
 
     assert settings.registration_limit == 5
+
+
+def test_web_settings_reads_auth_integration_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(WebSettings.DATABASE_URL_VARIABLE, DATABASE_URL)
+    monkeypatch.setenv(WebSettings.JWT_SECRET_KEY_VARIABLE, "secret-key")
+    monkeypatch.setenv(WebSettings.HUB_BOT_URL_VARIABLE, "https://t.me/hub")
+
+    settings = WebSettings.from_env()
+
+    assert settings.hub_bot_url == "https://t.me/hub"

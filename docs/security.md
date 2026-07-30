@@ -2,7 +2,8 @@
 
 ## Trust Model
 
-Postbox authenticates users through The Hub Bot. The authentication chain is:
+Postbox authenticates users through The Hub Bot. The login page links to the Hub
+Bot deep-link, and The Hub returns a signed handoff token to Postbox.
 
 ```
 Telegram account (verified by The Hub Bot)
@@ -19,7 +20,7 @@ User data (ownership validation)
 ### Components
 
 1. **Hub JWT verification** — server validates HMAC signature of Hub token with shared secret
-2. **Telegram identity** — extracted from verified Hub JWT (not self-reported)
+2. **Telegram identity** — extracted from verified Hub JWT, not self-reported
 3. **HTTPS only** — all authentication happens over encrypted connections
 4. **Application session** — stateless JWT stored in secure HttpOnly cookie
 5. **CSRF protection** — double-submit cookie for state-changing requests
@@ -31,11 +32,11 @@ User data (ownership validation)
 
 ### How it works
 
-1. User opens The Hub Bot
-2. User clicks "Postbox" button
-3. The Hub Bot creates a signed JWT with user's `telegram_id`
-4. The Hub Bot generates auth URL: `/auth/hub?token=<JWT>`
-5. User opens URL (or clicks link)
+1. User opens `/login`
+2. User clicks the Hub Bot link from `HUB_BOT_URL`
+3. The Hub Bot verifies the Telegram account
+4. The Hub Bot creates a signed JWT with user's `telegram_id`
+5. The Hub Bot generates auth URL: `/auth/hub?token=<JWT>`
 6. Postbox receives JWT and verifies signature with `HUB_AUTH_SECRET`
 7. Postbox extracts `telegram_id` from verified token
 8. Postbox creates local JWT session
@@ -54,8 +55,8 @@ Required environment variables:
 
 ```bash
 HUB_AUTH_SECRET=<shared-secret-with-hub-bot>  # Must match The Hub Bot
+HUB_BOT_URL=https://t.me/<hub-bot>?start=postbox
 POSTBOX_JWT_SECRET_KEY=<strong-random-secret> # For session JWT
-POSTBOX_PUBLIC_URL=https://postbox.example.com
 ```
 
 ### Dev bypass (development only)
@@ -282,8 +283,8 @@ No shared authentication database; each app is responsible for its authorization
 
 - [ ] `POSTBOX_DEV_LOGIN=false` in production config
 - [ ] `POSTBOX_JWT_SECRET_KEY` is strong random 64-char hex string
-- [ ] `POSTBOX_BOT_TOKEN` and `POSTBOX_BOT_USERNAME` are set
-- [ ] Bot is registered on domain with `/setdomain` in BotFather
+- [ ] `HUB_AUTH_SECRET` matches The Hub Bot configuration
+- [ ] `HUB_BOT_URL` points to the Hub Bot Postbox entry point
 - [ ] HTTPS is enabled on reverse proxy
 - [ ] `Secure` flag in cookies is `true`
 - [ ] Logs don't contain JWT, tokens, or Telegram payloads

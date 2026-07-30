@@ -64,10 +64,10 @@ Create `.env` file with production values:
 cat > .env << 'EOF'
 # Security (REQUIRED)
 POSTBOX_JWT_SECRET_KEY=replace-with-output-of-openssl-rand-hex-32
-POSTBOX_PUBLIC_URL=https://postbox.finpipe.net
 
-# Hub Bot integration (REQUIRED for authentication)
+# Hub Bot integration
 HUB_AUTH_SECRET=replace-with-hub-shared-secret
+HUB_BOT_URL=https://t.me/replace-with-hub-bot?start=postbox
 
 # Session security
 POSTBOX_COOKIE_SECURE=true
@@ -375,12 +375,13 @@ git reset --hard <commit-hash>
 docker compose up -d
 ```
 
-## Telegram Login Widget Configuration
+## Hub Bot Login Configuration
 
 ### Production checklist
 
-Authentication uses The Hub Bot (no standalone bot needed):
-- `HUB_AUTH_SECRET` is set (shared with The Hub Bot)
+Authentication uses The Hub Bot:
+- `HUB_AUTH_SECRET` is set for Hub handoff
+- `HUB_BOT_URL` points to the Hub Bot Postbox entry point, for example `https://t.me/<hub-bot>?start=postbox`
 - `POSTBOX_JWT_SECRET_KEY` is strong (32+ chars)
 - `POSTBOX_COOKIE_SECURE=true` (cookies require HTTPS)
 - `POSTBOX_DEV_LOGIN=false` (no dev bypass in production)

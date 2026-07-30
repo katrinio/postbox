@@ -273,6 +273,8 @@ def _pop_flash(request: Request, response: Response) -> str | None:
 @router.get("/login")
 async def login_page(request: Request) -> Response:
     settings = _settings(request)
+    if not settings.hub_bot_url:
+        logger.warning("Hub Bot login link is disabled; missing config: %s", WebSettings.HUB_BOT_URL_VARIABLE)
     csrf = _csrf_token(request)
     code = request.query_params.get("error")
     response = templates.TemplateResponse(
@@ -282,6 +284,7 @@ async def login_page(request: Request) -> Response:
             "dev_login": settings.dev_login,
             "csrf_token": csrf,
             "error": LOGIN_ERRORS.get(code) if code else None,
+            "hub_bot_url": settings.hub_bot_url,
         },
     )
     _set_csrf_cookie(response, csrf, settings)
