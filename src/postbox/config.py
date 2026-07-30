@@ -36,8 +36,6 @@ class WebSettings:
     # If absent, Hub authentication is disabled.
     hub_auth_secret: str | None = None
     hub_bot_url: str | None = None
-    telegram_bot_token: str | None = None
-    telegram_bot_username: str | None = None
 
     DATABASE_URL_VARIABLE: ClassVar[str] = "POSTBOX_DATABASE_URL"
     JWT_SECRET_KEY_VARIABLE: ClassVar[str] = "POSTBOX_JWT_SECRET_KEY"
@@ -47,8 +45,6 @@ class WebSettings:
     DEV_LOGIN_VARIABLE: ClassVar[str] = "POSTBOX_DEV_LOGIN"
     HUB_AUTH_SECRET_VARIABLE: ClassVar[str] = "HUB_AUTH_SECRET"
     HUB_BOT_URL_VARIABLE: ClassVar[str] = "HUB_BOT_URL"
-    TELEGRAM_BOT_TOKEN_VARIABLE: ClassVar[str] = "POSTBOX_BOT_TOKEN"
-    TELEGRAM_BOT_USERNAME_VARIABLE: ClassVar[str] = "POSTBOX_BOT_USERNAME"
 
     @classmethod
     def from_env(cls, env_file: str | Path = ".env") -> WebSettings:
@@ -80,6 +76,4 @@ class WebSettings:
             dev_login=_env_bool(cls.DEV_LOGIN_VARIABLE, default=False),
             hub_auth_secret=os.getenv(cls.HUB_AUTH_SECRET_VARIABLE, "").strip() or None,
             hub_bot_url=os.getenv(cls.HUB_BOT_URL_VARIABLE, "").strip() or None,
-            telegram_bot_token=os.getenv(cls.TELEGRAM_BOT_TOKEN_VARIABLE, "").strip() or None,
-            telegram_bot_username=os.getenv(cls.TELEGRAM_BOT_USERNAME_VARIABLE, "").strip() or None,
         )

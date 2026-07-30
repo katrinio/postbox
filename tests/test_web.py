@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, timedelta
 from html.parser import HTMLParser
@@ -19,8 +17,6 @@ from postbox.models import Correspondent, MailDirection, MailItem
 
 HUB_AUTH_SECRET = "test-hub-secret-at-least-32-bytes-long"
 JWT_SECRET = "test-jwt-secret-key-at-least-32-bytes-long"
-BOT_TOKEN = "123456:test-telegram-bot-token"
-BOT_USERNAME = "PostboxTestBot"
 
 
 def build_settings(tmp_path, **overrides) -> WebSettings:
@@ -49,34 +45,6 @@ def create_hub_auth_url(telegram_id: int, secret: str = HUB_AUTH_SECRET) -> str:
     }
     token = jwt.encode(payload, secret, algorithm="HS256")
     return f"/auth/hub?{urlencode({'token': token})}"
-
-
-def create_telegram_auth_url(
-    *,
-    telegram_id: int = 123,
-    first_name: str = "Telegram",
-    bot_token: str = BOT_TOKEN,
-    auth_date: int | None = None,
-    overrides: dict[str, str] | None = None,
-    remove_fields: set[str] | None = None,
-    include_hash: bool = True,
-) -> str:
-    values = {
-        "id": str(telegram_id),
-        "first_name": first_name,
-        "username": "telegram_user",
-        "auth_date": str(auth_date if auth_date is not None else int(datetime.now(UTC).timestamp())),
-    }
-    if overrides:
-        values.update(overrides)
-    if remove_fields:
-        for field in remove_fields:
-            values.pop(field, None)
-    if include_hash:
-        data_check_string = "\n".join(f"{key}={values[key]}" for key in sorted(values))
-        secret_key = hashlib.sha256(bot_token.encode()).digest()
-        values["hash"] = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-    return f"/auth/telegram?{urlencode(values)}"
 
 
 @asynccontextmanager
@@ -156,43 +124,33 @@ async def test_get_login_returns_html(tmp_path) -> None:
         response = await client.get("/login")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
-    assert "Вход через Telegram пока недоступен" in response.text
+    assert "Вход через The Hub Bot пока не настроен" in response.text
 
 
-async def test_login_shows_telegram_widget_when_configured(tmp_path) -> None:
-    settings = build_settings(
-        tmp_path,
-        telegram_bot_token=BOT_TOKEN,
-        telegram_bot_username=BOT_USERNAME,
-        hub_bot_url="https://t.me/hub_test_bot",
-    )
-    async with app_client(settings) as client:
-        response = await client.get("/login")
-    assert response.status_code == 200
-    assert "telegram-widget.js" in response.text
-    assert f'data-telegram-login="{BOT_USERNAME}"' in response.text
-    assert BOT_TOKEN not in response.text
-    assert 'href="https://t.me/hub_test_bot"' in response.text
-
-
-async def test_login_hides_telegram_widget_when_config_incomplete(tmp_path) -> None:
-    settings = build_settings(tmp_path, telegram_bot_token=BOT_TOKEN, telegram_bot_username=None)
+async def test_login_shows_hub_bot_link_when_configured(tmp_path) -> None:
+    settings = build_settings(tmp_path, hub_bot_url="https://t.me/hub_test_bot?start=postbox")
     async with app_client(settings) as client:
         response = await client.get("/login")
     assert response.status_code == 200
     assert "telegram-widget.js" not in response.text
-    assert "Вход через Telegram пока недоступен" in response.text
+    assert 'href="https://t.me/hub_test_bot?start=postbox"' in response.text
+    assert "Войти через The Hub Bot" in response.text
 
 
-async def test_login_keeps_hub_link_without_telegram_config(tmp_path) -> None:
-    settings = build_settings(
-        tmp_path, telegram_bot_token=None, telegram_bot_username=None, hub_bot_url="https://t.me/hub"
-    )
+async def test_login_handles_missing_hub_bot_link(tmp_path) -> None:
+    settings = build_settings(tmp_path, hub_bot_url=None)
     async with app_client(settings) as client:
         response = await client.get("/login")
     assert response.status_code == 200
     assert "telegram-widget.js" not in response.text
-    assert 'href="https://t.me/hub"' in response.text
+    assert "Вход через The Hub Bot пока не настроен" in response.text
+
+
+async def test_direct_telegram_auth_route_is_not_available(tmp_path) -> None:
+    settings = build_settings(tmp_path)
+    async with app_client(settings) as client:
+        response = await client.get("/auth/telegram")
+    assert response.status_code == 404
 
 
 async def test_static_css_is_served(tmp_path) -> None:
@@ -217,77 +175,6 @@ async def test_authenticated_home_succeeds(tmp_path) -> None:
         await _login(client, telegram_id=5)
         home = await client.get("/")
     assert home.status_code == 200
-
-
-async def test_telegram_login_valid_signature_creates_session(tmp_path) -> None:
-    settings = build_settings(tmp_path, telegram_bot_token=BOT_TOKEN, telegram_bot_username=BOT_USERNAME)
-    async with app_client(settings) as client:
-        response = await client.get(create_telegram_auth_url(telegram_id=501, first_name="Direct"))
-    assert response.status_code == 303
-    assert response.headers["location"] == "/"
-    token = response.cookies.get("postbox_session")
-    assert token is not None
-    payload = decode_jwt_token(token, JWT_SECRET)
-    assert payload is not None
-    assert payload["telegram_id"] == 501
-
-
-async def test_telegram_login_uses_same_session_cookie_type_as_hub(tmp_path) -> None:
-    settings = build_settings(tmp_path, telegram_bot_token=BOT_TOKEN, telegram_bot_username=BOT_USERNAME)
-    async with app_client(settings) as client:
-        telegram = await client.get(create_telegram_auth_url(telegram_id=502))
-        hub = await client.get(create_hub_auth_url(telegram_id=503))
-    telegram_cookie = telegram.cookies.get("postbox_session")
-    hub_cookie = hub.cookies.get("postbox_session")
-    assert telegram_cookie is not None
-    assert hub_cookie is not None
-    assert decode_jwt_token(telegram_cookie, JWT_SECRET) is not None
-    assert decode_jwt_token(hub_cookie, JWT_SECRET) is not None
-
-
-async def test_telegram_login_rejects_invalid_signature(tmp_path) -> None:
-    settings = build_settings(tmp_path, telegram_bot_token=BOT_TOKEN, telegram_bot_username=BOT_USERNAME)
-    url = create_telegram_auth_url(overrides={"hash": "bad-signature"})
-    async with app_client(settings) as client:
-        response = await client.get(url)
-    assert response.status_code == 303
-    assert response.headers["location"] == "/login?error=signature"
-    assert "postbox_session" not in response.cookies
-
-
-async def test_telegram_login_rejects_stale_auth_date(tmp_path) -> None:
-    settings = build_settings(tmp_path, telegram_bot_token=BOT_TOKEN, telegram_bot_username=BOT_USERNAME)
-    stale = int((datetime.now(UTC) - timedelta(days=2)).timestamp())
-    async with app_client(settings) as client:
-        response = await client.get(create_telegram_auth_url(auth_date=stale))
-    assert response.status_code == 303
-    assert response.headers["location"] == "/login?error=signature"
-
-
-async def test_telegram_login_rejects_missing_required_field(tmp_path) -> None:
-    settings = build_settings(tmp_path, telegram_bot_token=BOT_TOKEN, telegram_bot_username=BOT_USERNAME)
-    async with app_client(settings) as client:
-        response = await client.get(create_telegram_auth_url(remove_fields={"first_name"}))
-    assert response.status_code == 303
-    assert response.headers["location"] == "/login?error=signature"
-
-
-async def test_telegram_login_rejects_duplicate_field(tmp_path) -> None:
-    settings = build_settings(tmp_path, telegram_bot_token=BOT_TOKEN, telegram_bot_username=BOT_USERNAME)
-    url = create_telegram_auth_url() + "&id=456"
-    async with app_client(settings) as client:
-        response = await client.get(url)
-    assert response.status_code == 303
-    assert response.headers["location"] == "/login?error=signature"
-
-
-async def test_telegram_login_rejects_unexpected_field(tmp_path) -> None:
-    settings = build_settings(tmp_path, telegram_bot_token=BOT_TOKEN, telegram_bot_username=BOT_USERNAME)
-    url = create_telegram_auth_url() + "&next=/admin"
-    async with app_client(settings) as client:
-        response = await client.get(url)
-    assert response.status_code == 303
-    assert response.headers["location"] == "/login?error=signature"
 
 
 async def test_logout_clears_cookie(tmp_path) -> None:
