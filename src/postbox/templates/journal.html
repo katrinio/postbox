@@ -30,9 +30,9 @@
     <form method="get" action="/" class="journal-select-filters">
       <input type="hidden" name="filter" value="{{ current_filter }}" />
       <label>
-        <span class="sr-only">Корреспондент</span>
+        <span class="sr-only">Адресат</span>
         <select name="correspondent_id" onchange="this.form.submit()">
-          <option value="">Все корреспонденты</option>
+          <option value="">Все адресаты</option>
           {% for c in correspondents %}
           <option value="{{ c.id }}" {% if correspondent_id == c.id %}selected{% endif %}>{{ c.name }}</option>
           {% endfor %}

@@ -5,37 +5,62 @@
 {% block content %}
 <section class="correspondent-screen">
   <div class="correspondent-header">
-    <a class="back-link" href="/">← К журналу</a>
-    <h1>{{ correspondent.name }}</h1>
-
-    <dl class="correspondent-stats">
-      <div>
-        <dt>Отправлено</dt>
-        <dd>{{ outgoing_count }}</dd>
+    <a class="back-link" href="/correspondents">← Адресная</a>
+    <div class="correspondent-heading">
+      <h1 class="correspondent-title">{{ correspondent.name }}</h1>
+      <div class="correspondent-stats-inline">
+        <span aria-label="Отправлено: {{ outgoing_count }}">↗ {{ outgoing_count }}</span>
+        <span aria-label="Получено: {{ incoming_count }}">↙ {{ incoming_count }}</span>
       </div>
-      <div>
-        <dt>Получено</dt>
-        <dd>{{ incoming_count }}</dd>
-      </div>
-    </dl>
+    </div>
   </div>
 
   {% if flash %}
   <div class="flash-message" role="status">{{ flash }}</div>
   {% endif %}
 
-  <div class="correspondent-note">
-    <h2>Заметка</h2>
-    <form method="post" novalidate>
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-      <textarea name="note" rows="4" placeholder="Добавь заметку...">{{ correspondent.note or '' }}</textarea>
-      <button class="primary-button" type="submit">Сохранить</button>
-    </form>
-  </div>
+  <section class="correspondent-note" aria-labelledby="correspondent-note-title" data-note-editor>
+    <h2 id="correspondent-note-title">Заметка</h2>
 
-  {% if journal.items %}
-  <div class="correspondent-history">
-    <h2>История переписки</h2>
+    <div class="correspondent-note__display" {% if edit_note %}hidden{% endif %}>
+      {% if correspondent.note %}
+      <p class="correspondent-note__text">{{ correspondent.note }}</p>
+      {% else %}
+      <p class="correspondent-note__text correspondent-note__text--empty">Заметки пока нет</p>
+      {% endif %}
+      <button class="icon-button" type="button" aria-label="Редактировать заметку" data-note-edit>✎</button>
+    </div>
+
+    <form class="correspondent-note__form" method="post" novalidate {% if not edit_note %}hidden{% endif %}>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+      <div class="correspondent-note__editor">
+        <textarea name="note" rows="4" maxlength="250" aria-describedby="correspondent-note-counter{% if note_error %} correspondent-note-error{% endif %}">{{ note_value }}</textarea>
+        <span class="correspondent-note__counter" id="correspondent-note-counter" data-note-counter>0 / 250</span>
+      </div>
+      {% if note_error %}<p class="field-error" id="correspondent-note-error">{{ note_error }}</p>{% endif %}
+      <div class="correspondent-note__actions">
+        <button class="primary-button ghost-button--sm" type="submit" aria-label="Сохранить заметку">Сохранить</button>
+        <button class="ghost-button ghost-button--sm" type="button" data-note-cancel>Отмена</button>
+      </div>
+    </form>
+
+    <noscript>
+      <form class="correspondent-note__form" method="post" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <div class="correspondent-note__editor">
+          <textarea name="note" rows="4" maxlength="250">{{ note_value }}</textarea>
+          <span class="correspondent-note__counter">{{ note_value|length }} / 250</span>
+        </div>
+        <div class="correspondent-note__actions">
+          <button class="primary-button ghost-button--sm" type="submit" aria-label="Сохранить заметку">Сохранить</button>
+        </div>
+      </form>
+    </noscript>
+  </section>
+
+  <section class="correspondent-history" aria-labelledby="correspondent-history-title">
+    <h2 id="correspondent-history-title">История переписки</h2>
+    {% if journal.items %}
     <div class="journal-list">
       {% for item in journal.items %}
       {% set show_correspondent = false %}
@@ -54,14 +79,53 @@
       {% endif %}
     </nav>
     {% endif %}
-  </div>
-  {% else %}
-
-  <div class="empty-state">
-    <svg class="empty-state__icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
-    <p class="empty-state__title">Переписка с этим человеком ещё не началась</p>
-    <p class="empty-state__text"><a href="/mail/new">Добавить письмо</a></p>
-  </div>
-  {% endif %}
+    {% else %}
+    <div class="empty-state">
+      <p class="empty-state__title">Истории переписки пока нет</p>
+    </div>
+    {% endif %}
+  </section>
 </section>
+
+<script>
+  (function () {
+    var root = document.querySelector("[data-note-editor]");
+    if (!root) return;
+
+    var display = root.querySelector(".correspondent-note__display");
+    var form = root.querySelector(".correspondent-note__form");
+    var edit = root.querySelector("[data-note-edit]");
+    var cancel = root.querySelector("[data-note-cancel]");
+    var textarea = root.querySelector("textarea");
+    var counter = root.querySelector("[data-note-counter]");
+    var initialValue = textarea ? textarea.value : "";
+    var limit = 250;
+
+    function updateCounter() {
+      if (!textarea || !counter) return;
+      var length = Math.min(textarea.value.length, limit);
+      counter.textContent = length + " / " + limit;
+    }
+
+    function showForm() {
+      if (display) display.hidden = true;
+      if (form) form.hidden = false;
+      updateCounter();
+      if (textarea) textarea.focus();
+    }
+
+    function hideForm() {
+      if (textarea) textarea.value = initialValue;
+      updateCounter();
+      if (form) form.hidden = true;
+      if (display) display.hidden = false;
+      if (edit) edit.focus();
+    }
+
+    if (edit) edit.addEventListener("click", showForm);
+    if (cancel) cancel.addEventListener("click", hideForm);
+    if (textarea) textarea.addEventListener("input", updateCounter);
+    updateCounter();
+  })();
+</script>
 {% endblock %}

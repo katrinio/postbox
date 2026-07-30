@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint, select
+from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -11,6 +12,20 @@ from postbox.database.base import ActiveRecord
 if TYPE_CHECKING:
     from postbox.models.mail_item import MailItem
     from postbox.models.user import User
+
+
+MAX_CORRESPONDENT_NOTE_LENGTH = 250
+
+
+class CorrespondentNoteError(ValueError):
+    """Raised when a correspondent note cannot be saved."""
+
+
+@dataclass(frozen=True, slots=True)
+class CorrespondentSummary:
+    correspondent: Correspondent
+    outgoing_count: int
+    incoming_count: int
 
 
 class Correspondent(ActiveRecord):
@@ -47,6 +62,45 @@ class Correspondent(ActiveRecord):
     ) -> list[Correspondent]:
         statement = select(cls).where(cls.owner_id == owner_id).order_by(cls.name).limit(limit)
         return list(await session.scalars(statement))
+
+    @staticmethod
+    def normalize_note(note: str | None) -> str | None:
+        if note is None:
+            return None
+        normalized = note.strip()
+        if not normalized:
+            return None
+        if len(normalized) > MAX_CORRESPONDENT_NOTE_LENGTH:
+            raise CorrespondentNoteError("Заметка слишком длинная (максимум 250 символов).")
+        return normalized
+
+    @classmethod
+    async def summaries_for_owner(cls, session: AsyncSession, owner_id: int) -> list[CorrespondentSummary]:
+        from postbox.models.mail_item import MailDirection, MailItem
+
+        statement = (
+            select(
+                cls,
+                func.count(MailItem.id).filter(MailItem.direction == MailDirection.OUTGOING),
+                func.count(MailItem.id).filter(MailItem.direction == MailDirection.INCOMING),
+            )
+            .outerjoin(
+                MailItem,
+                (MailItem.owner_id == cls.owner_id) & (MailItem.correspondent_id == cls.id),
+            )
+            .where(cls.owner_id == owner_id)
+            .group_by(cls.id)
+            .order_by(func.lower(cls.name), cls.id)
+        )
+        rows = await session.execute(statement)
+        return [
+            CorrespondentSummary(
+                correspondent=correspondent,
+                outgoing_count=int(outgoing_count),
+                incoming_count=int(incoming_count),
+            )
+            for correspondent, outgoing_count, incoming_count in rows
+        ]
 
     @classmethod
     async def find_for_owner(

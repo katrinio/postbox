@@ -22,6 +22,7 @@ from postbox.auth.hub import HubAuthError
 from postbox.config import WebSettings
 from postbox.models import (
     Correspondent,
+    CorrespondentNoteError,
     MailDirection,
     MailGeographyError,
     MailItem,
@@ -789,6 +790,32 @@ async def update_note(
 # --- Correspondent detail ---
 
 
+@router.get("/correspondents")
+async def correspondents_index(
+    request: Request,
+    user_id: Annotated[int, Depends(current_user_id)],
+    session: Annotated[AsyncSession, Depends(web_session)],
+) -> Response:
+    settings = _settings(request)
+    user = await User.get(session, user_id)
+    if user is None:
+        raise NotAuthenticated
+
+    summaries = await Correspondent.summaries_for_owner(session, user_id)
+    csrf = _csrf_token(request)
+    response = templates.TemplateResponse(
+        request,
+        "correspondents.html",
+        {
+            "user": user,
+            "summaries": summaries,
+            "csrf_token": csrf,
+        },
+    )
+    _set_csrf_cookie(response, csrf, settings)
+    return response
+
+
 async def _load_correspondent(session: AsyncSession, user_id: int, correspondent_id: int) -> Correspondent:
     corr = await Correspondent.find_for_owner(session, owner_id=user_id, correspondent_id=correspondent_id)
     if corr is None:
@@ -821,6 +848,8 @@ async def correspondent_detail(
     )
 
     csrf = _csrf_token(request)
+    raw_flash = request.cookies.get(FLASH_COOKIE)
+    flash = unquote(raw_flash) if raw_flash else None
     response = templates.TemplateResponse(
         request,
         "correspondent_detail.html",
@@ -831,9 +860,15 @@ async def correspondent_detail(
             "incoming_count": incoming_count,
             "journal": journal,
             "csrf_token": csrf,
+            "flash": flash,
+            "note_error": None,
+            "note_value": correspondent.note or "",
+            "edit_note": False,
             "today": date.today(),
         },
     )
+    if raw_flash:
+        response.delete_cookie(FLASH_COOKIE, path="/")
     _set_csrf_cookie(response, csrf, settings)
     return response
 
@@ -854,12 +889,39 @@ async def correspondent_save_note(
 
     correspondent = await _load_correspondent(session, user_id, correspondent_id)
 
-    note_text = note.strip() or None
-    if note_text:
-        try:
-            note_text = MailItem.normalize_note(note_text)
-        except MailNoteError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+    try:
+        note_text = Correspondent.normalize_note(note)
+    except CorrespondentNoteError as error:
+        settings = _settings(request)
+        outgoing_count, incoming_count = await MailItem.correspondent_stats(session, user_id, correspondent_id)
+        journal = await MailItem.journal_page(
+            session,
+            user_id,
+            view=MailJournalFilter.ALL,
+            correspondent_id=correspondent_id,
+            page_size=50,
+        )
+        csrf = _csrf_token(request)
+        response = templates.TemplateResponse(
+            request,
+            "correspondent_detail.html",
+            {
+                "user": user,
+                "correspondent": correspondent,
+                "outgoing_count": outgoing_count,
+                "incoming_count": incoming_count,
+                "journal": journal,
+                "csrf_token": csrf,
+                "flash": None,
+                "note_error": str(error),
+                "note_value": note.strip(),
+                "edit_note": True,
+                "today": date.today(),
+            },
+            status_code=422,
+        )
+        _set_csrf_cookie(response, csrf, settings)
+        return response
 
     correspondent.note = note_text
     await correspondent.save(session)
