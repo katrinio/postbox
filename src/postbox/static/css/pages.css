@@ -291,7 +291,7 @@
 
 .journal-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
   flex-wrap: wrap;
@@ -303,6 +303,11 @@
   font-size: 0.9rem;
 }
 
+.journal-header .primary-button {
+  min-height: 40px;
+  padding: 0 var(--space-4);
+}
+
 /* --- Journal filters --- */
 
 .journal-filters {
@@ -310,12 +315,17 @@
   align-items: center;
   gap: var(--space-4);
   flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
 }
 
 .filter-row {
   display: flex;
+  align-items: center;
   gap: var(--space-2);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  margin: 0;
+  padding: 0;
 }
 
 .filter-pill {
@@ -323,16 +333,16 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  width: 64px;
   min-height: 36px;
   padding: 0 var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   font-size: 0.85rem;
-  line-height: 1;
+  line-height: 1.2;
   color: var(--color-ink-muted);
   text-decoration: none;
   white-space: nowrap;
+  box-sizing: border-box;
 }
 
 .filter-pill:hover,
@@ -365,7 +375,9 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  margin: 0;
+  padding: 0;
 }
 
 .journal-select-filters select {
@@ -383,6 +395,8 @@
   color: var(--color-ink-muted);
   font: inherit;
   font-size: 0.85rem;
+  line-height: 1.2;
+  box-sizing: border-box;
 }
 
 .journal-select-filters select:hover {
@@ -394,6 +408,13 @@
   outline: 3px solid var(--color-raspberry);
   outline-offset: 2px;
   border-color: transparent;
+}
+
+.journal-select-filters label {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
 }
 
 /* --- Journal list --- */
