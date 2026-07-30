@@ -6,9 +6,11 @@
   --color-surface-blue: #becdd7;
   --color-surface-sage: #d2d0aa;
   --color-surface-blush: #ddc0c4;
-  --color-rose: #d77f8d;
-  --color-raspberry: #8f3040;
-  --color-raspberry-dark: #762334;
+  --color-rose: #b97b86;
+  --color-raspberry: #b97b86;
+  --color-raspberry-hover: #c48b95;
+  --color-raspberry-active: #c0848f;
+  --color-raspberry-dark: #875862;
   --color-ink: #243139;
   --color-ink-muted: #536a78;
   --color-border: #aeb7b8;
@@ -16,7 +18,7 @@
   --color-frame: #b9b8b1;
   --color-hover: rgb(230 227 220 / 72%);
   --color-nav: rgb(207 206 198 / 96%);
-  --color-on-accent: #f3e9e7;
+  --color-on-accent: #2d2024;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -38,9 +40,11 @@
   --color-surface-blue: #3c505a;
   --color-surface-sage: #4b4c3a;
   --color-surface-blush: #543f45;
-  --color-rose: #d58895;
-  --color-raspberry: #e19aa5;
-  --color-raspberry-dark: #efb4bd;
+  --color-rose: #b97b86;
+  --color-raspberry: #b97b86;
+  --color-raspberry-hover: #c48b95;
+  --color-raspberry-active: #c0848f;
+  --color-raspberry-dark: #d2a0a8;
   --color-ink: #ebe6dd;
   --color-ink-muted: #aebdc5;
   --color-border: #617178;
@@ -394,6 +398,14 @@ button:focus-visible {
   gap: 9px;
   font-size: 0.94rem;
   font-weight: 550;
+}
+
+.primary-button:hover {
+  background: var(--color-raspberry-hover);
+}
+
+.primary-button:active {
+  background: var(--color-raspberry-active);
 }
 
 .screen-intro {
