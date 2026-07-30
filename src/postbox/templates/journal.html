@@ -3,11 +3,10 @@
 {% block title %}Журнал — Postbox{% endblock %}
 
 {% block content %}
-<section class="journal-screen" aria-labelledby="journal-title">
+<section class="journal-screen" aria-label="Журнал">
   <div class="journal-header">
     <div>
       {% include "_section_tabs.html" %}
-      <h1 id="journal-title">Журнал</h1>
       <p class="journal-subtitle">Хронология отправленных и полученных писем.</p>
     </div>
     <a class="primary-button" href="/mail/new">+ Добавить письмо</a>
@@ -33,7 +32,7 @@
       <label>
         <span class="sr-only">Адресат</span>
         <select name="correspondent_id" onchange="this.form.submit()">
-          <option value="">Все адресаты</option>
+          <option value="">Адресат</option>
           {% for c in correspondents %}
           <option value="{{ c.id }}" {% if correspondent_id == c.id %}selected{% endif %}>{{ c.name }}</option>
           {% endfor %}
@@ -43,7 +42,7 @@
       <label>
         <span class="sr-only">Страна</span>
         <select name="country" onchange="this.form.submit()">
-          <option value="">Все страны</option>
+          <option value="">Страна</option>
           {% for code in countries %}
           <option value="{{ code }}" {% if country == code %}selected{% endif %}>{{ code }}</option>
           {% endfor %}

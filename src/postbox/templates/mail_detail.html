@@ -17,7 +17,9 @@
         {% endif %}
       </span>
       <div>
-        <h1 class="detail-name">{{ item.correspondent.name }}</h1>
+        <h1 class="detail-name">
+          <a class="detail-name__link" href="/correspondent/{{ item.correspondent.id }}">{{ item.correspondent.name }}</a>
+        </h1>
         <p class="detail-direction">{% if item.direction.value == "incoming" %}Входящее письмо{% else %}Исходящее письмо{% endif %}</p>
       </div>
     </div>
@@ -36,11 +38,6 @@
         <dd>{{ format_date(item.received_at) }}</dd>
       </div>
       {% endif %}
-
-      <div class="detail-field">
-        <dt>Статус</dt>
-        <dd>{{ format_status(item) }}</dd>
-      </div>
 
       {% set route = format_route(item) %}
       {% if route %}

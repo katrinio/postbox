@@ -1005,7 +1005,9 @@ async def test_detail_shows_item(tmp_path) -> None:
     assert response.status_code == 200
     assert "Детальная" in response.text
     assert "Исходящее письмо" in response.text
+    assert 'class="detail-name__link" href="/correspondent/' in response.text
     assert "Отправлено" in response.text
+    assert "<dt>Статус</dt>" not in response.text
     assert "Редактировать" in response.text
 
 
