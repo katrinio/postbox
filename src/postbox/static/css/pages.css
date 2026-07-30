@@ -300,34 +300,29 @@
 .journal-filters {
   display: flex;
   align-items: center;
-  gap: var(--space-5);
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 
 .filter-row {
   display: flex;
-  gap: 0;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
 .filter-pill {
-  min-height: 34px;
-  padding: var(--space-2) var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  min-height: 36px;
+  padding: 0 var(--space-3);
   border: 1px solid var(--color-border);
-  border-right-width: 0;
+  border-radius: var(--radius-control);
   font-size: 0.85rem;
   color: var(--color-ink-muted);
   text-decoration: none;
   white-space: nowrap;
-}
-
-.filter-pill:first-child {
-  border-radius: var(--radius-control) 0 0 var(--radius-control);
-}
-
-.filter-pill:last-child {
-  border-right-width: 1px;
-  border-radius: 0 var(--radius-control) var(--radius-control) 0;
 }
 
 .filter-pill:hover,
@@ -344,7 +339,8 @@
 }
 
 .filter-pill--active {
-  background: var(--color-canvas);
+  border-color: var(--color-ink-muted);
+  background: var(--color-surface);
   color: var(--color-ink);
   font-weight: 500;
 }
@@ -365,7 +361,7 @@
   appearance: none;
   width: auto;
   max-width: min(240px, 100%);
-  min-height: 34px;
+  min-height: 36px;
   padding: 0 var(--space-6) 0 var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);

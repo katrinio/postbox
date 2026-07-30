@@ -23,7 +23,7 @@
         class="filter-pill{% if current_filter == fid %} filter-pill--active{% endif %}"
         href="{{ journal_url(filter_value=fid, correspondent_id=correspondent_id, country=country) }}"
         {% if current_filter == fid %}aria-current="page"{% endif %}
-      >{{ flabel }}{% if fid == "all" and stats.total %} <span class="filter-pill__count">{{ stats.total }}</span>{% elif fid == "outgoing" and stats.outgoing %} <span class="filter-pill__count">{{ stats.outgoing }}</span>{% elif fid == "incoming" and stats.incoming %} <span class="filter-pill__count">{{ stats.incoming }}</span>{% endif %}</a>
+      >{% if fid == "all" %}<span>Все</span>{% elif fid == "outgoing" %}<span aria-label="Отправленные">↗</span>{% elif fid == "incoming" %}<span aria-label="Полученные">↙</span>{% endif %}{% if fid == "all" and stats.total %} <span class="filter-pill__count">{{ stats.total }}</span>{% elif fid == "outgoing" and stats.outgoing %} <span class="filter-pill__count">{{ stats.outgoing }}</span>{% elif fid == "incoming" and stats.incoming %} <span class="filter-pill__count">{{ stats.incoming }}</span>{% endif %}</a>
       {% endfor %}
     </nav>
 
