@@ -134,7 +134,7 @@ async def test_login_shows_hub_bot_link_when_configured(tmp_path) -> None:
     assert response.status_code == 200
     assert "telegram-widget.js" not in response.text
     assert 'href="https://t.me/hub_test_bot?start=postbox"' in response.text
-    assert "Войти через The Hub Bot" in response.text
+    assert "Открыть The Hub" in response.text
 
 
 async def test_login_handles_missing_hub_bot_link(tmp_path) -> None:
