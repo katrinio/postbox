@@ -48,11 +48,7 @@ def test_web_settings_reads_auth_integration_settings(monkeypatch: pytest.Monkey
     monkeypatch.setenv(WebSettings.DATABASE_URL_VARIABLE, DATABASE_URL)
     monkeypatch.setenv(WebSettings.JWT_SECRET_KEY_VARIABLE, "secret-key")
     monkeypatch.setenv(WebSettings.HUB_BOT_URL_VARIABLE, "https://t.me/hub")
-    monkeypatch.setenv(WebSettings.TELEGRAM_BOT_TOKEN_VARIABLE, "123:token")
-    monkeypatch.setenv(WebSettings.TELEGRAM_BOT_USERNAME_VARIABLE, "PostboxBot")
 
     settings = WebSettings.from_env()
 
     assert settings.hub_bot_url == "https://t.me/hub"
-    assert settings.telegram_bot_token == "123:token"
-    assert settings.telegram_bot_username == "PostboxBot"

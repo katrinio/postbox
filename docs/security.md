@@ -2,15 +2,15 @@
 
 ## Trust Model
 
-Postbox authenticates users either directly through Telegram Login or through The Hub Bot.
-Both paths create the same local application session:
+Postbox authenticates users through The Hub Bot. The login page links to the Hub
+Bot deep-link, and The Hub returns a signed handoff token to Postbox.
 
 ```
-Telegram account
-    ↓
-Telegram Login Widget OR The Hub Bot JWT
-    ↓
-Postbox verifies Telegram signature OR Hub JWT signature
+Telegram account (verified by The Hub Bot)
+    ↓ (Hub Bot creates signed JWT)
+The Hub Bot issues JWT with telegram_id
+    ↓ (Postbox verifies Hub JWT signature)
+Postbox extracts and validates telegram_id
     ↓ (local session creation)
 Postbox application session (JWT in HttpOnly cookie)
     ↓ (authorization checks)
@@ -19,8 +19,8 @@ User data (ownership validation)
 
 ### Components
 
-1. **Telegram Login verification** — server validates the official Login Widget HMAC with `POSTBOX_BOT_TOKEN`
-2. **Hub JWT verification** — server validates HMAC signature of Hub token with shared secret
+1. **Hub JWT verification** — server validates HMAC signature of Hub token with shared secret
+2. **Telegram identity** — extracted from verified Hub JWT, not self-reported
 3. **HTTPS only** — all authentication happens over encrypted connections
 4. **Application session** — stateless JWT stored in secure HttpOnly cookie
 5. **CSRF protection** — double-submit cookie for state-changing requests
@@ -28,35 +28,15 @@ User data (ownership validation)
 
 ---
 
-## 1. Direct Telegram Login
+## 1. Hub Bot Authentication
 
 ### How it works
 
 1. User opens `/login`
-2. Telegram Login Widget redirects to `/auth/telegram` with signed fields
-3. Postbox rejects unexpected, duplicate, missing, stale, or tampered parameters
-4. Postbox verifies the Telegram signature with `POSTBOX_BOT_TOKEN`
-5. Postbox finds or creates the user by Telegram ID
-6. Postbox creates local JWT session
-
-### Security properties
-
-- **Signature verification**: Telegram Login HMAC is verified server-side
-- **Secret isolation**: `POSTBOX_BOT_TOKEN` is never sent to templates or frontend
-- **Replay window**: stale `auth_date` values are rejected
-- **Constant-time comparison**: signature comparison uses `compare_digest`
-
----
-
-## 2. Hub Bot Authentication
-
-### How it works
-
-1. User opens The Hub Bot
-2. User clicks "Postbox" button
-3. The Hub Bot creates a signed JWT with user's `telegram_id`
-4. The Hub Bot generates auth URL: `/auth/hub?token=<JWT>`
-5. User opens URL (or clicks link)
+2. User clicks the Hub Bot link from `HUB_BOT_URL`
+3. The Hub Bot verifies the Telegram account
+4. The Hub Bot creates a signed JWT with user's `telegram_id`
+5. The Hub Bot generates auth URL: `/auth/hub?token=<JWT>`
 6. Postbox receives JWT and verifies signature with `HUB_AUTH_SECRET`
 7. Postbox extracts `telegram_id` from verified token
 8. Postbox creates local JWT session
@@ -75,9 +55,7 @@ Required environment variables:
 
 ```bash
 HUB_AUTH_SECRET=<shared-secret-with-hub-bot>  # Must match The Hub Bot
-HUB_BOT_URL=https://t.me/<hub-bot>
-POSTBOX_BOT_TOKEN=<telegram-bot-token>
-POSTBOX_BOT_USERNAME=<telegram-bot-username>
+HUB_BOT_URL=https://t.me/<hub-bot>?start=postbox
 POSTBOX_JWT_SECRET_KEY=<strong-random-secret> # For session JWT
 ```
 
@@ -89,7 +67,7 @@ When `POSTBOX_DEV_LOGIN=true`, a test form accepts `telegram_id + first_name` wi
 
 ---
 
-## 3. Application Session (JWT)
+## 2. Application Session (JWT)
 
 ### Structure
 
@@ -305,8 +283,8 @@ No shared authentication database; each app is responsible for its authorization
 
 - [ ] `POSTBOX_DEV_LOGIN=false` in production config
 - [ ] `POSTBOX_JWT_SECRET_KEY` is strong random 64-char hex string
-- [ ] `POSTBOX_BOT_TOKEN` and `POSTBOX_BOT_USERNAME` are set
-- [ ] Bot is registered on domain with `/setdomain` in BotFather
+- [ ] `HUB_AUTH_SECRET` matches The Hub Bot configuration
+- [ ] `HUB_BOT_URL` points to the Hub Bot Postbox entry point
 - [ ] HTTPS is enabled on reverse proxy
 - [ ] `Secure` flag in cookies is `true`
 - [ ] Logs don't contain JWT, tokens, or Telegram payloads

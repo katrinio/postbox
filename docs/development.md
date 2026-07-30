@@ -19,10 +19,9 @@ cp .env.example .env
 Postbox loads `.env` from the current working directory. Existing process
 environment variables take priority over values from the file.
 
-For direct Telegram Login, create a bot with [BotFather](https://t.me/BotFather)
-and set `POSTBOX_BOT_TOKEN` plus `POSTBOX_BOT_USERNAME`. Register the local or
-production domain with BotFather before testing the official Login Widget.
-`HUB_BOT_URL` is optional and controls the "Open The Hub Bot" link on the login page.
+Postbox login goes through The Hub Bot. Set `HUB_AUTH_SECRET` to the shared
+secret used by The Hub, and set `HUB_BOT_URL` to the ready-to-open Hub Bot link
+for Postbox, for example `https://t.me/<hub-bot>?start=postbox`.
 
 Create the schema before the first run and after pulling new migrations:
 

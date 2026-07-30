@@ -65,13 +65,9 @@ cat > .env << 'EOF'
 # Security (REQUIRED)
 POSTBOX_JWT_SECRET_KEY=replace-with-output-of-openssl-rand-hex-32
 
-# Direct Telegram Login
-POSTBOX_BOT_TOKEN=replace-with-telegram-bot-token
-POSTBOX_BOT_USERNAME=replace-with-telegram-bot-username
-
 # Hub Bot integration
 HUB_AUTH_SECRET=replace-with-hub-shared-secret
-HUB_BOT_URL=https://t.me/replace-with-hub-bot
+HUB_BOT_URL=https://t.me/replace-with-hub-bot?start=postbox
 
 # Session security
 POSTBOX_COOKIE_SECURE=true
@@ -379,15 +375,13 @@ git reset --hard <commit-hash>
 docker compose up -d
 ```
 
-## Telegram Login Widget Configuration
+## Hub Bot Login Configuration
 
 ### Production checklist
 
-Authentication supports direct Telegram Login and The Hub Bot:
-- `POSTBOX_BOT_TOKEN` and `POSTBOX_BOT_USERNAME` are set for direct Telegram Login
-- the Postbox domain is registered for the Telegram bot in BotFather
+Authentication uses The Hub Bot:
 - `HUB_AUTH_SECRET` is set for Hub handoff
-- `HUB_BOT_URL` is set if the login page should link to The Hub Bot
+- `HUB_BOT_URL` points to the Hub Bot Postbox entry point, for example `https://t.me/<hub-bot>?start=postbox`
 - `POSTBOX_JWT_SECRET_KEY` is strong (32+ chars)
 - `POSTBOX_COOKIE_SECURE=true` (cookies require HTTPS)
 - `POSTBOX_DEV_LOGIN=false` (no dev bypass in production)
