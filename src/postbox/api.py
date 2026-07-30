@@ -8,6 +8,8 @@ import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.responses import Response
 
 from postbox.config import WebSettings
 from postbox.database import Database
@@ -17,6 +19,26 @@ from postbox.views import register_web
 
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
+
+
+class CacheControlMiddleware(BaseHTTPMiddleware):
+    """Set cache headers for HTML and static assets."""
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        response = await call_next(request)
+
+        # HTML responses: no-cache (check with server every time)
+        if response.headers.get("content-type", "").startswith("text/html"):
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+
+        # Static files with version query param: aggressive cache
+        # (URL changes with static_version, so this is safe for long periods)
+        if request.url.path.startswith("/static/") and "v=" in str(request.url.query):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+
+        return response
 
 
 async def database_session(request: Request) -> AsyncIterator[AsyncSession]:
@@ -48,6 +70,8 @@ def create_app(settings: WebSettings | None = None) -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+
+    app.add_middleware(CacheControlMiddleware)
 
     @app.get("/api/health", response_model=HealthResponse)
     async def health() -> HealthResponse:

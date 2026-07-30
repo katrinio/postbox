@@ -1,4 +1,6 @@
+import hashlib
 import os
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
@@ -8,6 +10,28 @@ from dotenv import load_dotenv
 
 class ConfigurationError(RuntimeError):
     """Raised when Postbox cannot start with the current environment."""
+
+
+def _get_default_static_version() -> str:
+    """Get static version from git SHA or fallback to hash of package root."""
+    try:
+        # Try to get short git SHA (7 chars)
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=Path(__file__).parent.parent.parent,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        if sha:
+            return sha
+    except subprocess.CalledProcessError, FileNotFoundError:
+        pass
+
+    # Fallback: hash of package root directory
+    # This ensures consistent version across restarts in dev/test
+    package_root = Path(__file__).parent
+    version_seed = str(package_root.stat().st_mtime).encode()
+    return hashlib.sha256(version_seed).hexdigest()[:7]
 
 
 def _env_bool(name: str, *, default: bool) -> bool:
@@ -36,6 +60,9 @@ class WebSettings:
     # If absent, Hub authentication is disabled.
     hub_auth_secret: str | None = None
     hub_bot_url: str | None = None
+    # Static asset version: appended to CSS/JS URLs as ?v=<static_version>
+    # Changes on every release to force browser refresh. Defaults to git SHA.
+    static_version: str = ""
 
     DATABASE_URL_VARIABLE: ClassVar[str] = "POSTBOX_DATABASE_URL"
     JWT_SECRET_KEY_VARIABLE: ClassVar[str] = "POSTBOX_JWT_SECRET_KEY"
@@ -45,6 +72,7 @@ class WebSettings:
     DEV_LOGIN_VARIABLE: ClassVar[str] = "POSTBOX_DEV_LOGIN"
     HUB_AUTH_SECRET_VARIABLE: ClassVar[str] = "HUB_AUTH_SECRET"
     HUB_BOT_URL_VARIABLE: ClassVar[str] = "HUB_BOT_URL"
+    STATIC_VERSION_VARIABLE: ClassVar[str] = "POSTBOX_STATIC_VERSION"
 
     @classmethod
     def from_env(cls, env_file: str | Path = ".env") -> WebSettings:
@@ -67,6 +95,10 @@ class WebSettings:
         except ValueError:
             registration_limit = 5
 
+        static_version = os.getenv(cls.STATIC_VERSION_VARIABLE, "").strip()
+        if not static_version:
+            static_version = _get_default_static_version()
+
         return cls(
             database_url=database_url,
             jwt_secret_key=jwt_secret,
@@ -76,4 +108,5 @@ class WebSettings:
             dev_login=_env_bool(cls.DEV_LOGIN_VARIABLE, default=False),
             hub_auth_secret=os.getenv(cls.HUB_AUTH_SECRET_VARIABLE, "").strip() or None,
             hub_bot_url=os.getenv(cls.HUB_BOT_URL_VARIABLE, "").strip() or None,
+            static_version=static_version,
         )

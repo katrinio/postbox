@@ -128,6 +128,20 @@ def _settings(request: Request) -> WebSettings:
     return request.app.state.web_settings
 
 
+def _render(
+    request: Request,
+    name: str,
+    context: dict | None = None,
+    status_code: int = 200,
+) -> Response:
+    """Render a Jinja2 template with automatic static_version in context."""
+    if context is None:
+        context = {}
+    context.setdefault("request", request)
+    context.setdefault("static_version", _settings(request).static_version)
+    return templates.TemplateResponse(request, name=name, context=context, status_code=status_code)
+
+
 async def current_user_id(request: Request) -> int:
     """Resolve the authenticated user id from the session cookie (HTML routes)."""
     settings = _settings(request)
@@ -277,7 +291,7 @@ async def login_page(request: Request) -> Response:
         logger.warning("Hub Bot login link is disabled; missing config: %s", WebSettings.HUB_BOT_URL_VARIABLE)
     csrf = _csrf_token(request)
     code = request.query_params.get("error")
-    response = templates.TemplateResponse(
+    response = _render(
         request,
         "login.html",
         {
@@ -475,7 +489,7 @@ async def home(
     csrf = _csrf_token(request)
     raw_flash = request.cookies.get(FLASH_COOKIE)
     flash = unquote(raw_flash) if raw_flash else None
-    response = templates.TemplateResponse(
+    response = _render(
         request,
         "journal.html",
         {
@@ -514,7 +528,7 @@ async def new_mail_form(
         raise NotAuthenticated
     correspondents = await Correspondent.for_owner(session, user_id)
     csrf = _csrf_token(request)
-    response = templates.TemplateResponse(
+    response = _render(
         request,
         "mail_form.html",
         {
@@ -590,7 +604,7 @@ async def create_mail(
     if errors:
         correspondents = await Correspondent.for_owner(session, user_id)
         csrf = _csrf_token(request)
-        response = templates.TemplateResponse(
+        response = _render(
             request,
             "mail_form.html",
             {
@@ -663,7 +677,7 @@ async def mail_detail(
         raise NotAuthenticated
     item = await _load_item(session, user_id, mail_id)
     csrf = _csrf_token(request)
-    response = templates.TemplateResponse(
+    response = _render(
         request,
         "mail_detail.html",
         {
@@ -691,7 +705,7 @@ async def edit_note_form(
     item = await _load_item(session, user_id, mail_id)
     csrf = _csrf_token(request)
     correspondents = await Correspondent.for_owner(session, user_id)
-    response = templates.TemplateResponse(
+    response = _render(
         request,
         "mail_edit.html",
         {
@@ -754,7 +768,7 @@ async def update_note(
     if errors:
         correspondents = await Correspondent.for_owner(session, user_id)
         csrf = _csrf_token(request)
-        response = templates.TemplateResponse(
+        response = _render(
             request,
             "mail_edit.html",
             {
@@ -806,7 +820,7 @@ async def correspondents_index(
 
     summaries = await Correspondent.summaries_for_owner(session, user_id)
     csrf = _csrf_token(request)
-    response = templates.TemplateResponse(
+    response = _render(
         request,
         "correspondents.html",
         {
@@ -853,7 +867,7 @@ async def correspondent_detail(
     csrf = _csrf_token(request)
     raw_flash = request.cookies.get(FLASH_COOKIE)
     flash = unquote(raw_flash) if raw_flash else None
-    response = templates.TemplateResponse(
+    response = _render(
         request,
         "correspondent_detail.html",
         {
@@ -905,7 +919,7 @@ async def correspondent_save_note(
             page_size=50,
         )
         csrf = _csrf_token(request)
-        response = templates.TemplateResponse(
+        response = _render(
             request,
             "correspondent_detail.html",
             {
