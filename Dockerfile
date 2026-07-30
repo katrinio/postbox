@@ -49,9 +49,14 @@ assert (pkg / 'static' / 'css' / 'app.css').exists(), 'missing static assets'; \
 
 FROM python:3.14-slim AS runtime
 
+# Build argument for version (e.g., git SHA or release tag)
+# Pass via: docker build --build-arg VERSION=<git-sha>
+ARG VERSION=""
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PATH="/opt/venv/bin:${PATH}"
+    PATH="/opt/venv/bin:${PATH}" \
+    POSTBOX_STATIC_VERSION="${VERSION}"
 
 WORKDIR /app
 
