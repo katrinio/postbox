@@ -384,30 +384,6 @@ button:focus-visible {
   line-height: 1.55;
 }
 
-.primary-button {
-  display: inline-flex;
-  min-height: 48px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 18px;
-  border: 0;
-  border-radius: var(--radius-control);
-  background: var(--color-raspberry);
-  color: var(--color-on-accent);
-  cursor: pointer;
-  gap: 9px;
-  font-size: 0.94rem;
-  font-weight: 550;
-}
-
-.primary-button:hover {
-  background: var(--color-raspberry-hover);
-}
-
-.primary-button:active {
-  background: var(--color-raspberry-active);
-}
-
 .screen-intro {
   margin-bottom: 26px;
 }
