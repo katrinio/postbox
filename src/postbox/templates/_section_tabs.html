@@ -1,0 +1,5 @@
+{% set path = request.url.path %}
+<nav class="section-tabs" aria-label="Разделы">
+  <a class="section-tabs__link{% if path == '/' or path.startswith('/mail') %} section-tabs__link--active{% endif %}" href="/" {% if path == '/' or path.startswith('/mail') %}aria-current="page"{% endif %}>Журнал</a>
+  <a class="section-tabs__link{% if path.startswith('/correspondent') %} section-tabs__link--active{% endif %}" href="/correspondents" {% if path.startswith('/correspondent') %}aria-current="page"{% endif %}>Адресная</a>
+</nav>
