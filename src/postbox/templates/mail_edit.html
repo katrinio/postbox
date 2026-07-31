@@ -133,11 +133,6 @@ document.querySelectorAll('.country-input').forEach(input => {
       c.code.toLowerCase().includes(query.toLowerCase())
     );
 
-    if (!query.trim()) {
-      dropdown.style.display = 'none';
-      return;
-    }
-
     if (filtered.length === 0) {
       dropdown.style.display = 'none';
       return;
@@ -149,9 +144,21 @@ document.querySelectorAll('.country-input').forEach(input => {
     dropdown.style.display = 'block';
   }
 
+  function showAllCountries() {
+    dropdown.innerHTML = countriesData.slice(0, 10).map(c =>
+      `<div class="country-option" data-code="${c.code}" data-name="${c.name}">${c.name} (${c.code})</div>`
+    ).join('');
+    dropdown.style.display = 'block';
+  }
+
   input.addEventListener('input', (e) => {
     hiddenInput.value = '';
-    renderDropdown(e.target.value);
+    const query = e.target.value.trim();
+    if (query) {
+      renderDropdown(query);
+    } else {
+      dropdown.style.display = 'none';
+    }
   });
 
   input.addEventListener('blur', () => {
@@ -168,9 +175,12 @@ document.querySelectorAll('.country-input').forEach(input => {
     }
   });
 
-  input.addEventListener('focus', (e) => {
-    if (e.target.value.trim()) {
-      renderDropdown(e.target.value);
+  input.addEventListener('focus', () => {
+    const query = input.value.trim();
+    if (query) {
+      renderDropdown(query);
+    } else {
+      showAllCountries();
     }
   });
 
