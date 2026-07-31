@@ -5,6 +5,7 @@ from datetime import date
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Self
 
+import pycountry
 from sqlalchemy import (
     CheckConstraint,
     Date,
@@ -184,7 +185,10 @@ class MailItem(ActiveRecord):
             return None
         if len(normalized) != 2 or not normalized.isascii() or not normalized.isalpha():
             raise MailGeographyError("country code must be exactly 2 ASCII letters")
-        return normalized.upper()
+        code_upper = normalized.upper()
+        if pycountry.countries.get(alpha_2=code_upper) is None:
+            raise MailGeographyError(f"country code '{code_upper}' is not a valid ISO 3166-1 alpha-2 code")
+        return code_upper
 
     @staticmethod
     def normalize_city(value: str | None) -> str | None:

@@ -61,19 +61,18 @@
           {% if errors.origin_city %}<p class="field-error" id="err-origin-city">{{ errors.origin_city }}</p>{% endif %}
         </div>
         <div class="form-field location-grid__country">
-          <label for="origin_country">Страна</label>
+          <label for="origin_country_display">Страна</label>
           <input
             type="text"
-            id="origin_country"
-            name="origin_country"
-            value="{{ geography_values.origin_country }}"
-            placeholder="DE"
-            maxlength="2"
-            inputmode="latin"
+            id="origin_country_display"
+            class="country-input"
+            placeholder="Germany"
             autocomplete="off"
-            autocapitalize="characters"
+            data-field="origin_country"
             {% if errors.origin_country %}aria-invalid="true" aria-describedby="err-origin-country"{% endif %}
           />
+          <input type="hidden" id="origin_country" name="origin_country" value="{{ geography_values.origin_country }}" />
+          <div class="country-dropdown" data-dropdown="origin_country" style="display: none;"></div>
           {% if errors.origin_country %}<p class="field-error" id="err-origin-country">{{ errors.origin_country }}</p>{% endif %}
         </div>
       </div>
@@ -96,19 +95,18 @@
           {% if errors.destination_city %}<p class="field-error" id="err-destination-city">{{ errors.destination_city }}</p>{% endif %}
         </div>
         <div class="form-field location-grid__country">
-          <label for="destination_country">Страна</label>
+          <label for="destination_country_display">Страна</label>
           <input
             type="text"
-            id="destination_country"
-            name="destination_country"
-            value="{{ geography_values.destination_country }}"
-            placeholder="FR"
-            maxlength="2"
-            inputmode="latin"
+            id="destination_country_display"
+            class="country-input"
+            placeholder="France"
             autocomplete="off"
-            autocapitalize="characters"
+            data-field="destination_country"
             {% if errors.destination_country %}aria-invalid="true" aria-describedby="err-destination-country"{% endif %}
           />
+          <input type="hidden" id="destination_country" name="destination_country" value="{{ geography_values.destination_country }}" />
+          <div class="country-dropdown" data-dropdown="destination_country" style="display: none;"></div>
           {% if errors.destination_country %}<p class="field-error" id="err-destination-country">{{ errors.destination_country }}</p>{% endif %}
         </div>
       </div>
@@ -120,4 +118,69 @@
     </div>
   </form>
 </section>
+
+<script>
+const countriesData = {{ countries_list | tojson }};
+
+document.querySelectorAll('.country-input').forEach(input => {
+  const fieldName = input.dataset.field;
+  const hiddenInput = document.getElementById(fieldName);
+  const dropdown = document.querySelector(`[data-dropdown="${fieldName}"]`);
+
+  function renderDropdown(query) {
+    const filtered = countriesData.filter(c =>
+      c.name.toLowerCase().includes(query.toLowerCase()) ||
+      c.code.toLowerCase().includes(query.toLowerCase())
+    );
+
+    if (!query.trim()) {
+      dropdown.style.display = 'none';
+      return;
+    }
+
+    if (filtered.length === 0) {
+      dropdown.style.display = 'none';
+      return;
+    }
+
+    dropdown.innerHTML = filtered.slice(0, 10).map(c =>
+      `<div class="country-option" data-code="${c.code}" data-name="${c.name}">${c.name} (${c.code})</div>`
+    ).join('');
+    dropdown.style.display = 'block';
+  }
+
+  input.addEventListener('input', (e) => {
+    hiddenInput.value = '';
+    renderDropdown(e.target.value);
+  });
+
+  input.addEventListener('blur', () => {
+    setTimeout(() => {
+      dropdown.style.display = 'none';
+    }, 200);
+  });
+
+  dropdown.addEventListener('click', (e) => {
+    if (e.target.classList.contains('country-option')) {
+      input.value = e.target.dataset.name;
+      hiddenInput.value = e.target.dataset.code;
+      dropdown.style.display = 'none';
+    }
+  });
+
+  input.addEventListener('focus', (e) => {
+    if (e.target.value.trim()) {
+      renderDropdown(e.target.value);
+    }
+  });
+
+  // Restore display name if code is set (e.g., after validation error)
+  if (hiddenInput.value) {
+    const country = countriesData.find(c => c.code === hiddenInput.value);
+    if (country) {
+      input.value = country.name;
+    }
+  }
+});
+</script>
 {% endblock %}

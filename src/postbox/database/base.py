@@ -1,13 +1,18 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Self
 
-from sqlalchemy import DateTime, Integer, func
+from sqlalchemy import DateTime, Integer
 from sqlalchemy.ext.asyncio import AsyncAttrs, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(AsyncAttrs, DeclarativeBase):
     """Declarative root for every Postbox record."""
+
+
+def _utc_now() -> datetime:
+    """Return current UTC time."""
+    return datetime.now(UTC)
 
 
 class ActiveRecord(Base):
@@ -21,13 +26,13 @@ class ActiveRecord(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        server_default=func.now(),
+        default=_utc_now,
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
+        default=_utc_now,
+        onupdate=_utc_now,
         nullable=False,
     )
 
