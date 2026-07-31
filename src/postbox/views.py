@@ -7,10 +7,12 @@ import logging
 import secrets
 from collections.abc import AsyncIterator
 from datetime import date
+from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import quote, unquote, urlencode
 
+import pycountry
 from fastapi import APIRouter, Depends, FastAPI, Form, HTTPException, Request, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -69,6 +71,14 @@ _DATE_MONTHS = [
 
 def _format_date(value: date) -> str:
     return f"{value.day} {_DATE_MONTHS[value.month]}"
+
+
+@lru_cache(maxsize=1)
+def _get_countries_list() -> tuple[dict[str, str], ...]:
+    """Return a sorted list of ISO 3166-1 alpha-2 countries with names for UI."""
+    return tuple(
+        {"code": country.alpha_2, "name": country.name} for country in sorted(pycountry.countries, key=lambda c: c.name)
+    )
 
 
 def _format_status(item: MailItem) -> str:
@@ -535,6 +545,7 @@ async def new_mail_form(
             "user": user,
             "csrf_token": csrf,
             "correspondents": correspondents,
+            "countries_list": list(_get_countries_list()),
             "errors": {},
             "values": _empty_mail_form_values(),
             "today": str(date.today()),
@@ -611,6 +622,7 @@ async def create_mail(
                 "user": user,
                 "csrf_token": csrf,
                 "correspondents": correspondents,
+                "countries_list": list(_get_countries_list()),
                 "errors": errors,
                 "values": {
                     "direction": direction,
@@ -717,6 +729,7 @@ async def edit_note_form(
             "note_value": item.note or "",
             "geography_values": _geography_values_from_item(item),
             "correspondents": correspondents,
+            "countries_list": list(_get_countries_list()),
         },
     )
     _set_csrf_cookie(response, csrf, settings)
@@ -785,6 +798,7 @@ async def update_note(
                     destination_country=destination_country,
                 ),
                 "correspondents": correspondents,
+                "countries_list": list(_get_countries_list()),
             },
             status_code=422,
         )
