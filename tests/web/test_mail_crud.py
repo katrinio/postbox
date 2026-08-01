@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 
 import httpx
+from sqlalchemy import select
 
 from postbox.api import create_app
+from postbox.models import Correspondent, MailItem
 
 from .conftest import (
     JWT_SECRET,
@@ -15,6 +18,12 @@ from .conftest import (
     app_client,
     build_settings,
 )
+
+
+def _extract_mail_id(html: str) -> int:
+    match = re.search(r'href="/mail/(\d+)"', html)
+    assert match
+    return int(match.group(1))
 
 
 async def test_create_form_requires_auth(tmp_path) -> None:
@@ -316,6 +325,218 @@ async def test_detail_other_user_returns_404(tmp_path) -> None:
             await _login(client, telegram_id=72, first_name="Intruder")
             response = await client.get("/mail/1")
     assert response.status_code == 404
+
+
+# --- Delete mail --------------------------------------------------------
+
+
+async def test_delete_own_mail_removes_item_redirects_and_keeps_contact(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=73, first_name="Deleter")
+            from postbox.auth import decode_jwt_token
+
+            token = client.cookies.get("postbox_session")
+            user_id = decode_jwt_token(token, JWT_SECRET)["user_id"]
+            await _seed_mail(
+                app,
+                user_id,
+                [
+                    {"correspondent": "Удаляемая", "direction": "outgoing", "sent_at": today},
+                    {"correspondent": "Остающаяся", "direction": "incoming", "received_at": today},
+                ],
+            )
+
+            await client.get("/")
+            csrf = client.cookies.get("postbox_csrf")
+            async with app.state.database.session_factory() as session:
+                mail_id = (
+                    await session.execute(
+                        select(MailItem.id)
+                        .join(Correspondent, MailItem.correspondent_id == Correspondent.id)
+                        .where(MailItem.owner_id == user_id, Correspondent.name == "Удаляемая")
+                    )
+                ).scalar_one()
+            response = await client.post(f"/mail/{mail_id}/delete", data={"csrf_token": csrf})
+            client.cookies.update(response.cookies)
+
+            async with app.state.database.session_factory() as session:
+                deleted_item = await MailItem.get(session, mail_id)
+                remaining_names = (
+                    (
+                        await session.execute(
+                            select(Correspondent.name)
+                            .join(MailItem, MailItem.correspondent_id == Correspondent.id)
+                            .where(MailItem.owner_id == user_id)
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                contacts = (
+                    (await session.execute(select(Correspondent).where(Correspondent.owner_id == user_id)))
+                    .scalars()
+                    .all()
+                )
+
+            redirected_journal = await client.get("/")
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+    assert deleted_item is None
+    assert remaining_names == ["Остающаяся"]
+    assert {contact.name for contact in contacts} == {"Удаляемая", "Остающаяся"}
+    assert "Запись удалена." in redirected_journal.text
+
+
+async def test_delete_other_user_mail_returns_404_and_does_not_delete(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=74, first_name="Owner")
+            from postbox.auth import decode_jwt_token
+
+            token = client.cookies.get("postbox_session")
+            owner_id = decode_jwt_token(token, JWT_SECRET)["user_id"]
+            await _seed_mail(app, owner_id, [{"correspondent": "Чужая", "direction": "outgoing", "sent_at": today}])
+            owner_journal = await client.get("/")
+            mail_id = _extract_mail_id(owner_journal.text)
+
+            await _login(client, telegram_id=75, first_name="Intruder")
+            await client.get("/")
+            csrf = client.cookies.get("postbox_csrf")
+            response = await client.post(f"/mail/{mail_id}/delete", data={"csrf_token": csrf})
+
+            async with app.state.database.session_factory() as session:
+                item = await MailItem.get(session, mail_id)
+
+    assert response.status_code == 404
+    assert item is not None
+    assert item.owner_id == owner_id
+
+
+async def test_delete_missing_mail_returns_404(tmp_path) -> None:
+    async with app_client(build_settings(tmp_path)) as client:
+        await _login(client, telegram_id=76)
+        await client.get("/")
+        csrf = client.cookies.get("postbox_csrf")
+        response = await client.post("/mail/999/delete", data={"csrf_token": csrf})
+
+    assert response.status_code == 404
+
+
+async def test_get_delete_mail_does_not_delete(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=77)
+            from postbox.auth import decode_jwt_token
+
+            token = client.cookies.get("postbox_session")
+            user_id = decode_jwt_token(token, JWT_SECRET)["user_id"]
+            await _seed_mail(app, user_id, [{"correspondent": "GET safe", "direction": "outgoing", "sent_at": today}])
+            journal = await client.get("/")
+            mail_id = _extract_mail_id(journal.text)
+
+            response = await client.get(f"/mail/{mail_id}/delete")
+
+            async with app.state.database.session_factory() as session:
+                item = await MailItem.get(session, mail_id)
+
+    assert response.status_code == 405
+    assert item is not None
+
+
+async def test_delete_mail_requires_csrf(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=78)
+            from postbox.auth import decode_jwt_token
+
+            token = client.cookies.get("postbox_session")
+            user_id = decode_jwt_token(token, JWT_SECRET)["user_id"]
+            await _seed_mail(app, user_id, [{"correspondent": "CSRF", "direction": "outgoing", "sent_at": today}])
+            journal = await client.get("/")
+            mail_id = _extract_mail_id(journal.text)
+
+            response = await client.post(f"/mail/{mail_id}/delete", data={"csrf_token": "wrong"})
+
+            async with app.state.database.session_factory() as session:
+                item = await MailItem.get(session, mail_id)
+
+    assert response.status_code == 303
+    assert "error=csrf" in response.headers["location"]
+    assert item is not None
+
+
+async def test_repeated_delete_mail_is_handled_as_missing(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=79)
+            from postbox.auth import decode_jwt_token
+
+            token = client.cookies.get("postbox_session")
+            user_id = decode_jwt_token(token, JWT_SECRET)["user_id"]
+            await _seed_mail(app, user_id, [{"correspondent": "Twice", "direction": "outgoing", "sent_at": today}])
+            journal = await client.get("/")
+            csrf = client.cookies.get("postbox_csrf")
+            mail_id = _extract_mail_id(journal.text)
+
+            first = await client.post(f"/mail/{mail_id}/delete", data={"csrf_token": csrf})
+            second = await client.post(f"/mail/{mail_id}/delete", data={"csrf_token": csrf})
+
+            async with app.state.database.session_factory() as session:
+                item = await MailItem.get(session, mail_id)
+
+    assert first.status_code == 303
+    assert first.headers["location"] == "/"
+    assert second.status_code == 404
+    assert item is None
+
+
+async def test_detail_contains_secondary_delete_form_only_on_detail_page(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=80)
+            from postbox.auth import decode_jwt_token
+
+            token = client.cookies.get("postbox_session")
+            user_id = decode_jwt_token(token, JWT_SECRET)["user_id"]
+            await _seed_mail(
+                app,
+                user_id,
+                [{"correspondent": "Detail only", "direction": "outgoing", "sent_at": today}],
+            )
+            journal = await client.get("/")
+            mail_id = _extract_mail_id(journal.text)
+            detail = await client.get(f"/mail/{mail_id}")
+
+    assert f'action="/mail/{mail_id}/delete"' not in journal.text
+    assert f'action="/mail/{mail_id}/delete"' in detail.text
+    assert "return confirm(" in detail.text
+    assert 'class="detail-actions"' in detail.text
 
 
 # --- Notes --------------------------------------------------------------

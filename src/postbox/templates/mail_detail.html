@@ -59,6 +59,10 @@
       <a class="ghost-button" href="/mail/{{ item.id }}/edit">
         Редактировать
       </a>
+      <form class="inline-form" method="post" action="/mail/{{ item.id }}/delete" onsubmit="return confirm('Удалить эту запись?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <button class="ghost-button" type="submit">Удалить</button>
+      </form>
     </div>
   </div>
 </section>
