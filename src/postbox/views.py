@@ -809,6 +809,27 @@ async def update_note(
     return redirect
 
 
+@router.post("/mail/{mail_id}/delete")
+async def delete_mail(
+    request: Request,
+    mail_id: int,
+    user_id: Annotated[int, Depends(current_user_id)],
+    session: Annotated[AsyncSession, Depends(web_session)],
+    csrf_token: Annotated[str, Form()],
+) -> Response:
+    _verify_csrf(request, csrf_token)
+    user = await User.get(session, user_id)
+    if user is None:
+        raise NotAuthenticated
+    item = await _load_item(session, user_id, mail_id)
+    await item.delete(session)
+    await session.commit()
+
+    redirect = RedirectResponse("/", status_code=303)
+    _set_flash(redirect, "Запись удалена.")
+    return redirect
+
+
 # --- Correspondent detail ---
 
 
