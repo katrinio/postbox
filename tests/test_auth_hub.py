@@ -47,6 +47,49 @@ class TestHubTokenVerification:
         identity = verify_hub_token(valid_hub_token, hub_secret)
         assert isinstance(identity, HubIdentity)
         assert identity.telegram_user_id == 123456789
+        assert identity.profile_claims == frozenset()
+
+    def test_valid_token_extracts_profile_claims(self, hub_secret: str) -> None:
+        """Valid Hub token should expose public Telegram profile claims."""
+        now = datetime.now(UTC)
+        payload = {
+            "sub": "123456789",
+            "telegram_id": 123456789,
+            "first_name": "Katrin",
+            "last_name": "Example",
+            "username": "katrin_dev",
+            "language_code": "ru",
+            "aud": "postbox",
+            "iss": "the-hub-bot",
+            "iat": now,
+            "exp": now + timedelta(minutes=5),
+        }
+        token = jwt.encode(payload, hub_secret, algorithm="HS256")
+
+        identity = verify_hub_token(token, hub_secret)
+
+        assert identity.telegram_user_id == 123456789
+        assert identity.first_name == "Katrin"
+        assert identity.last_name == "Example"
+        assert identity.username == "katrin_dev"
+        assert identity.language_code == "ru"
+        assert identity.profile_claims == frozenset({"first_name", "last_name", "username", "language_code"})
+
+    def test_mismatched_sub_and_telegram_id_rejected(self, hub_secret: str) -> None:
+        """telegram_id claim must match sub when both are present."""
+        now = datetime.now(UTC)
+        payload = {
+            "sub": "123456789",
+            "telegram_id": 987654321,
+            "aud": "postbox",
+            "iss": "the-hub-bot",
+            "iat": now,
+            "exp": now + timedelta(minutes=5),
+        }
+        token = jwt.encode(payload, hub_secret, algorithm="HS256")
+
+        with pytest.raises(InvalidClaim, match="does not match"):
+            verify_hub_token(token, hub_secret)
 
     def test_invalid_signature_rejected(self, valid_hub_token: str) -> None:
         """Token with wrong signature should be rejected."""

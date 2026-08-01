@@ -30,7 +30,7 @@
       {% if user is defined and user %}
       {% set path = request.url.path %}
       <nav class="site-header__nav">
-        <span class="site-header__user">{{ user.first_name }}</span>
+        <span class="site-header__user">{{ user.display_name }}</span>
         <form method="post" action="/logout" class="site-header__logout">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
           <button class="ghost-button ghost-button--sm" type="submit">Выйти</button>

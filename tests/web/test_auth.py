@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
+
+import jwt
+
+from postbox.models import User
 
 from .conftest import (
+    HUB_AUTH_SECRET,
     _login,
     app_client,
     build_settings,
+    create_hub_auth_url,
 )
 
 
@@ -75,6 +81,318 @@ async def test_logout_without_csrf_is_rejected(tmp_path) -> None:
         response = await client.post("/logout", data={"csrf_token": "wrong-token"})
     assert response.status_code == 303
     assert response.headers["location"] == "/login?error=csrf"
+
+
+# --- Hub authentication -------------------------------------------------------
+
+
+async def test_hub_auth_creates_user_with_profile_claims(tmp_path) -> None:
+    settings = build_settings(tmp_path)
+    async with app_client(settings) as client:
+        response = await client.get(
+            create_hub_auth_url(
+                123456789,
+                profile_claims={
+                    "telegram_id": 123456789,
+                    "first_name": "Katrin",
+                    "last_name": "Example",
+                    "username": "katrin_dev",
+                    "language_code": "ru",
+                },
+            )
+        )
+
+        assert response.status_code == 303
+        async with client._transport.app.state.database.session_factory() as session:
+            user = await User.find_by_telegram_id(session, 123456789)
+
+        assert user is not None
+        assert user.first_name == "Katrin"
+        assert user.last_name == "Example"
+        assert user.username == "katrin_dev"
+        assert user.language_code == "ru"
+
+
+async def test_hub_auth_updates_existing_user_profile(tmp_path) -> None:
+    settings = build_settings(tmp_path)
+    async with app_client(settings) as client:
+        await client.get(
+            create_hub_auth_url(
+                2001,
+                profile_claims={
+                    "telegram_id": 2001,
+                    "first_name": "Old",
+                    "last_name": "Name",
+                    "username": "old_username",
+                    "language_code": "en",
+                },
+            )
+        )
+        await client.get(
+            create_hub_auth_url(
+                2001,
+                profile_claims={
+                    "telegram_id": 2001,
+                    "first_name": "New",
+                    "last_name": "Profile",
+                    "username": "new_username",
+                    "language_code": "ru",
+                },
+            )
+        )
+
+        async with client._transport.app.state.database.session_factory() as session:
+            user = await User.find_by_telegram_id(session, 2001)
+
+        assert user is not None
+        assert user.first_name == "New"
+        assert user.last_name == "Profile"
+        assert user.username == "new_username"
+        assert user.language_code == "ru"
+
+
+async def test_hub_auth_syncs_changed_username(tmp_path) -> None:
+    settings = build_settings(tmp_path)
+    async with app_client(settings) as client:
+        await client.get(
+            create_hub_auth_url(2002, profile_claims={"telegram_id": 2002, "first_name": "User", "username": "old"})
+        )
+        await client.get(
+            create_hub_auth_url(2002, profile_claims={"telegram_id": 2002, "first_name": "User", "username": "new"})
+        )
+
+        async with client._transport.app.state.database.session_factory() as session:
+            user = await User.find_by_telegram_id(session, 2002)
+
+        assert user is not None
+        assert user.username == "new"
+
+
+async def test_hub_auth_handles_nullable_profile_claims(tmp_path) -> None:
+    settings = build_settings(tmp_path)
+    async with app_client(settings) as client:
+        await client.get(
+            create_hub_auth_url(
+                2003,
+                profile_claims={
+                    "telegram_id": 2003,
+                    "first_name": "Nullable",
+                    "last_name": None,
+                    "username": None,
+                    "language_code": None,
+                },
+            )
+        )
+
+        async with client._transport.app.state.database.session_factory() as session:
+            user = await User.find_by_telegram_id(session, 2003)
+
+        assert user is not None
+        assert user.first_name == "Nullable"
+        assert user.last_name is None
+        assert user.username is None
+        assert user.language_code is None
+
+
+async def test_old_hub_token_does_not_clear_existing_profile(tmp_path) -> None:
+    settings = build_settings(tmp_path)
+    async with app_client(settings) as client:
+        await client.get(
+            create_hub_auth_url(
+                2004,
+                profile_claims={
+                    "telegram_id": 2004,
+                    "first_name": "Saved",
+                    "last_name": "Person",
+                    "username": "saved_user",
+                    "language_code": "ru",
+                },
+            )
+        )
+        await client.get(create_hub_auth_url(2004))
+
+        async with client._transport.app.state.database.session_factory() as session:
+            user = await User.find_by_telegram_id(session, 2004)
+
+        assert user is not None
+        assert user.first_name == "Saved"
+        assert user.last_name == "Person"
+        assert user.username == "saved_user"
+        assert user.language_code == "ru"
+
+
+async def test_old_hub_token_uses_fallback_only_for_new_user(tmp_path) -> None:
+    settings = build_settings(tmp_path)
+    async with app_client(settings) as client:
+        await client.get(create_hub_auth_url(2005))
+
+        async with client._transport.app.state.database.session_factory() as session:
+            user = await User.find_by_telegram_id(session, 2005)
+
+        assert user is not None
+        assert user.first_name == "Telegram User"
+        assert user.last_name is None
+        assert user.username is None
+
+
+async def test_display_name_fallback_order(tmp_path) -> None:
+    settings = build_settings(tmp_path)
+    async with app_client(settings) as client:
+        await client.get(
+            create_hub_auth_url(
+                2006,
+                profile_claims={
+                    "telegram_id": 2006,
+                    "first_name": "Katrin",
+                    "last_name": "Example",
+                    "username": "katrin_dev",
+                },
+            )
+        )
+        response = await client.get("/")
+        assert "Katrin Example" in response.text
+
+        async with client._transport.app.state.database.session_factory() as session:
+            user = await User.find_by_telegram_id(session, 2006)
+            assert user is not None
+            user.first_name = ""
+            user.last_name = None
+            user.username = "katrin_dev"
+            await user.save(session)
+            await session.commit()
+
+        response = await client.get("/")
+        assert "@katrin_dev" in response.text
+
+        async with client._transport.app.state.database.session_factory() as session:
+            user = await User.find_by_telegram_id(session, 2006)
+            assert user is not None
+            user.username = None
+            await user.save(session)
+            await session.commit()
+
+        response = await client.get("/")
+        assert "Telegram User" in response.text
+
+
+async def test_mismatched_sub_and_telegram_id_rejects_login(tmp_path) -> None:
+    settings = build_settings(tmp_path)
+    now = datetime.now(UTC)
+    token = jwt.encode(
+        {
+            "sub": "3001",
+            "telegram_id": 3002,
+            "aud": "postbox",
+            "iss": "the-hub-bot",
+            "iat": now,
+            "exp": now + timedelta(minutes=5),
+        },
+        HUB_AUTH_SECRET,
+        algorithm="HS256",
+    )
+
+    async with app_client(settings) as client:
+        response = await client.get(f"/auth/hub?token={token}")
+
+        assert response.status_code == 303
+        assert response.headers["location"] == "/login?error=hub_auth"
+        assert "postbox_session" not in client.cookies
+        async with client._transport.app.state.database.session_factory() as session:
+            assert await User.find_by_telegram_id(session, 3001) is None
+            assert await User.find_by_telegram_id(session, 3002) is None
+
+
+async def test_invalid_hub_signature_does_not_sync_user(tmp_path) -> None:
+    settings = build_settings(tmp_path)
+    async with app_client(settings) as client:
+        response = await client.get(
+            create_hub_auth_url(
+                3003,
+                secret="wrong-secret-at-least-32-bytes-long",
+                profile_claims={"telegram_id": 3003, "first_name": "Invalid"},
+            )
+        )
+
+        assert response.status_code == 303
+        assert response.headers["location"] == "/login?error=hub_auth"
+        assert "postbox_session" not in client.cookies
+        async with client._transport.app.state.database.session_factory() as session:
+            assert await User.find_by_telegram_id(session, 3003) is None
+
+
+async def test_wrong_aud_iss_and_expired_hub_tokens_do_not_sync_user(tmp_path) -> None:
+    settings = build_settings(tmp_path)
+    now = datetime.now(UTC)
+    payloads = [
+        {"sub": "3004", "aud": "other", "iss": "the-hub-bot", "iat": now, "exp": now + timedelta(minutes=5)},
+        {"sub": "3005", "aud": "postbox", "iss": "other", "iat": now, "exp": now + timedelta(minutes=5)},
+        {"sub": "3006", "aud": "postbox", "iss": "the-hub-bot", "iat": now, "exp": now - timedelta(minutes=1)},
+    ]
+
+    async with app_client(settings) as client:
+        for payload in payloads:
+            payload.update({"telegram_id": int(payload["sub"]), "first_name": "Rejected"})
+            token = jwt.encode(payload, HUB_AUTH_SECRET, algorithm="HS256")
+            response = await client.get(f"/auth/hub?token={token}")
+            assert response.status_code == 303
+            assert response.headers["location"] == "/login?error=hub_auth"
+
+        async with client._transport.app.state.database.session_factory() as session:
+            assert await User.find_by_telegram_id(session, 3004) is None
+            assert await User.find_by_telegram_id(session, 3005) is None
+            assert await User.find_by_telegram_id(session, 3006) is None
+
+
+async def test_profile_one_user_cannot_update_another_user(tmp_path) -> None:
+    settings = build_settings(tmp_path)
+    async with app_client(settings) as client:
+        await client.get(create_hub_auth_url(4001, profile_claims={"telegram_id": 4001, "first_name": "First"}))
+
+        response = await client.get(
+            create_hub_auth_url(
+                4002,
+                profile_claims={"telegram_id": 4001, "first_name": "Wrong"},
+            )
+        )
+
+        assert response.status_code == 303
+        assert response.headers["location"] == "/login?error=hub_auth"
+        async with client._transport.app.state.database.session_factory() as session:
+            first = await User.find_by_telegram_id(session, 4001)
+            second = await User.find_by_telegram_id(session, 4002)
+
+        assert first is not None
+        assert first.first_name == "First"
+        assert second is None
+
+
+async def test_db_error_does_not_authorize_user(tmp_path, monkeypatch) -> None:
+    settings = build_settings(tmp_path)
+
+    async def fail_sync(*args, **kwargs):
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr("postbox.views.sync_user_from_hub_claims", fail_sync)
+
+    async with app_client(settings) as client:
+        response = await client.get(
+            create_hub_auth_url(5001, profile_claims={"telegram_id": 5001, "first_name": "DbError"})
+        )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?error=hub_auth"
+    assert "postbox_session" not in client.cookies
+
+
+async def test_hub_auth_logs_do_not_include_token(tmp_path, caplog) -> None:
+    settings = build_settings(tmp_path)
+    auth_url = create_hub_auth_url(5002, secret="wrong-secret-at-least-32-bytes-long")
+    token = auth_url.split("token=", 1)[1]
+
+    async with app_client(settings) as client:
+        await client.get(auth_url)
+
+    assert token not in caplog.text
 
 
 # --- Existing behavior preserved ----------------------------------------------
