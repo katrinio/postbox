@@ -36,6 +36,20 @@ class User(ActiveRecord):
         overlaps="correspondent,mail_items",
     )
 
+    @property
+    def display_name(self) -> str:
+        first_name = self.first_name.strip() if self.first_name else ""
+        last_name = self.last_name.strip() if self.last_name else ""
+        username = self.username.strip() if self.username else ""
+
+        if first_name and last_name:
+            return f"{first_name} {last_name}"
+        if first_name:
+            return first_name
+        if username:
+            return f"@{username}"
+        return "Telegram User"
+
     @classmethod
     async def find_by_telegram_id(cls, session: AsyncSession, telegram_id: int) -> User | None:
         statement = select(cls).where(cls.telegram_id == telegram_id)

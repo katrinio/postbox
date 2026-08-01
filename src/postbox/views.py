@@ -16,11 +16,13 @@ import pycountry
 from fastapi import APIRouter, Depends, FastAPI, Form, HTTPException, Request, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import RedirectResponse, Response
 
 from postbox.auth import create_jwt_token, decode_jwt_token, verify_hub_token
 from postbox.auth.hub import HubAuthError
+from postbox.auth.sync import sync_user_from_hub_claims
 from postbox.config import WebSettings
 from postbox.models import (
     Correspondent,
@@ -341,32 +343,21 @@ async def hub_auth_callback(
         logger.warning("Hub auth verification failed: %s", type(e).__name__)
         return RedirectResponse("/login?error=hub_auth", status_code=303)
 
-    # Find or create Postbox user from Hub identity.
-    # Hub only provides telegram_user_id (already verified by Telegram).
-    user = await User.find_by_telegram_id(session, identity.telegram_user_id)
-    if user is None:
-        # New user: create with minimal defaults
-        user = await User.create(
-            session,
-            telegram_id=identity.telegram_user_id,
-            username=None,
-            first_name="Telegram User",
-            last_name=None,
-            language_code=None,
-            approved_at=None,
-        )
-        logger.info("Hub auth: created new user for telegram_id=%d", identity.telegram_user_id)
-    else:
-        # Existing user: do not overwrite metadata; just use as-is
-        logger.debug("Hub auth: existing user telegram_id=%d", identity.telegram_user_id)
+    try:
+        user = await sync_user_from_hub_claims(session, identity)
 
-    # Apply registration limit policy (same as Telegram auth)
-    if not await user.approve_within_limit(session, limit=settings.registration_limit):
-        logger.info("Hub auth: registration limit reached for telegram_id=%d", identity.telegram_user_id)
-        await session.commit()  # Persist the user for manual approval later
-        return RedirectResponse("/login?error=limit", status_code=303)
+        # Apply registration limit policy (same as Telegram auth)
+        if not await user.approve_within_limit(session, limit=settings.registration_limit):
+            logger.info("Hub auth: registration limit reached for telegram_id=%d", identity.telegram_user_id)
+            await session.commit()  # Persist the user for manual approval later
+            return RedirectResponse("/login?error=limit", status_code=303)
 
-    await session.commit()
+        await session.commit()
+    except (SQLAlchemyError, RuntimeError) as e:
+        await session.rollback()
+        logger.warning("Hub auth user sync failed for telegram_id=%d: %s", identity.telegram_user_id, type(e).__name__)
+        return RedirectResponse("/login?error=hub_auth", status_code=303)
+
     token_jwt = create_jwt_token(user.id, user.telegram_id, settings.jwt_secret_key)
     response = RedirectResponse("/", status_code=303)
     # Set Referrer-Policy to prevent token leakage in Referer header

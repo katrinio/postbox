@@ -24,7 +24,12 @@ HUB_AUTH_SECRET = "test-hub-secret-at-least-32-bytes-long"
 JWT_SECRET = "test-jwt-secret-key-at-least-32-bytes-long"
 
 
-def create_hub_auth_url(telegram_id: int, secret: str = HUB_AUTH_SECRET) -> str:
+def create_hub_auth_url(
+    telegram_id: int,
+    secret: str = HUB_AUTH_SECRET,
+    *,
+    profile_claims: dict | None = None,
+) -> str:
     """Create a Hub Bot auth URL with a valid JWT token."""
     now = datetime.now(UTC)
     payload = {
@@ -34,6 +39,8 @@ def create_hub_auth_url(telegram_id: int, secret: str = HUB_AUTH_SECRET) -> str:
         "iat": now,
         "exp": now + timedelta(minutes=5),
     }
+    if profile_claims:
+        payload.update(profile_claims)
     token = jwt.encode(payload, secret, algorithm="HS256")
     return f"/auth/hub?{urlencode({'token': token})}"
 

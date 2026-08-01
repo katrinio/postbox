@@ -40,6 +40,24 @@ class HubIdentity:
     """Verified identity from Hub Bot JWT token."""
 
     telegram_user_id: int
+    first_name: str | None = None
+    last_name: str | None = None
+    username: str | None = None
+    language_code: str | None = None
+    profile_claims: frozenset[str] = frozenset()
+
+
+PROFILE_CLAIMS = frozenset({"first_name", "last_name", "username", "language_code"})
+
+
+def _optional_string_claim(payload: dict, claim: str) -> str | None:
+    value = payload.get(claim)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise InvalidClaim(f"{claim} claim must be a string or null")
+    value = value.strip()
+    return value or None
 
 
 def verify_hub_token(token: str, secret: str) -> HubIdentity:
@@ -103,4 +121,24 @@ def verify_hub_token(token: str, secret: str) -> HubIdentity:
     if telegram_user_id <= 0:
         raise InvalidClaim("sub (telegram_user_id) must be a positive integer")
 
-    return HubIdentity(telegram_user_id=telegram_user_id)
+    telegram_id_claim = payload.get("telegram_id")
+    if telegram_id_claim is not None:
+        try:
+            claimed_telegram_id = int(telegram_id_claim)
+        except (TypeError, ValueError) as e:
+            raise InvalidClaim("telegram_id claim must be a positive integer") from e
+        if claimed_telegram_id <= 0:
+            raise InvalidClaim("telegram_id claim must be a positive integer")
+        if claimed_telegram_id != telegram_user_id:
+            raise InvalidClaim("telegram_id claim does not match sub")
+
+    present_profile_claims = frozenset(claim for claim in PROFILE_CLAIMS if claim in payload)
+
+    return HubIdentity(
+        telegram_user_id=telegram_user_id,
+        first_name=_optional_string_claim(payload, "first_name"),
+        last_name=_optional_string_claim(payload, "last_name"),
+        username=_optional_string_claim(payload, "username"),
+        language_code=_optional_string_claim(payload, "language_code"),
+        profile_claims=present_profile_claims,
+    )
