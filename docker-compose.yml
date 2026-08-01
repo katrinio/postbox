@@ -2,6 +2,11 @@ services:
   postbox:
     build: .
     restart: unless-stopped
+
+    labels:
+      com.katrin.logs.app: "postbox"
+      com.katrin.logs.environment: "production"
+
     ports:
       - "127.0.0.1:8014:8000"
     environment:
