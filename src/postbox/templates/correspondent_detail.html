@@ -59,6 +59,25 @@
     </noscript>
   </section>
 
+  <div class="correspondent-actions">
+    <button class="ghost-button" type="button" data-delete-contact-open>Delete contact</button>
+  </div>
+
+  <dialog class="confirm-dialog" aria-labelledby="delete-contact-title" aria-describedby="delete-contact-description" data-delete-contact-dialog>
+    <form method="post" action="/correspondent/{{ correspondent.id }}/delete">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+      <h2 id="delete-contact-title">Delete contact?</h2>
+      <div id="delete-contact-description" class="confirm-dialog__description">
+        <p>This contact will be removed from your address book.</p>
+        <p>Existing letters will remain in your journal.</p>
+      </div>
+      <div class="confirm-dialog__actions">
+        <button class="ghost-button" type="button" data-delete-contact-cancel>Cancel</button>
+        <button class="ghost-button" type="submit">Delete contact</button>
+      </div>
+    </form>
+  </dialog>
+
   <section class="correspondent-history" aria-labelledby="correspondent-history-title">
     <h2 id="correspondent-history-title">История переписки</h2>
     {% if journal.items %}
@@ -133,6 +152,25 @@
       });
     }
     updateCounter();
+  })();
+
+  (function () {
+    var open = document.querySelector("[data-delete-contact-open]");
+    var dialog = document.querySelector("[data-delete-contact-dialog]");
+    var cancel = document.querySelector("[data-delete-contact-cancel]");
+    if (!open || !dialog || !cancel) return;
+
+    open.addEventListener("click", function () {
+      if (typeof dialog.showModal === "function") {
+        dialog.showModal();
+        cancel.focus();
+      }
+    });
+
+    cancel.addEventListener("click", function () {
+      dialog.close();
+      open.focus();
+    });
   })();
 </script>
 {% endblock %}

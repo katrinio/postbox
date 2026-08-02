@@ -50,6 +50,7 @@ class Correspondent(ActiveRecord):
     mail_items: Mapped[list[MailItem]] = relationship(
         back_populates="correspondent",
         overlaps="owner,mail_items",
+        passive_deletes=True,
     )
 
     @classmethod

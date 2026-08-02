@@ -9,6 +9,10 @@
     <p class="correspondents-subtitle">Люди, с которыми уже есть письма в Postbox.</p>
   </div>
 
+  {% if flash %}
+  <div class="flash-message" role="status">{{ flash }}</div>
+  {% endif %}
+
   {% if summaries %}
   <div class="correspondent-list">
     {% for summary in summaries %}

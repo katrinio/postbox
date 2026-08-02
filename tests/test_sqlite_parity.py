@@ -150,27 +150,53 @@ async def test_row_referencing_missing_user_is_rejected(database: Database) -> N
             await Correspondent.create(session, owner_id=999, name="Ghost owner")
 
 
-async def test_mail_cannot_use_another_users_correspondent(database: Database) -> None:
+async def test_mail_referencing_missing_correspondent_is_rejected(database: Database) -> None:
     async with database.session_factory() as session:
-        first = await _make_user(session, telegram_id=10, name="First")
-        second = await _make_user(session, telegram_id=11, name="Second")
-        correspondent = await Correspondent.create(session, owner_id=first.id, name="Private")
+        user = await _make_user(session, telegram_id=10)
         await session.commit()
-        second_id, correspondent_id = second.id, correspondent.id
+        user_id = user.id
 
     async with database.session_factory() as session:
         with pytest.raises(IntegrityError):
             await MailItem.create(
                 session,
-                owner_id=second_id,
-                correspondent_id=correspondent_id,
+                owner_id=user_id,
+                correspondent_id=999,
                 direction=MailDirection.INCOMING,
                 sent_at=None,
                 received_at=date(2026, 7, 20),
             )
 
 
-async def test_on_delete_cascade_removes_children(database: Database) -> None:
+async def test_deleting_correspondent_sets_mail_correspondent_null(database: Database) -> None:
+    async with database.session_factory() as session:
+        user = await _make_user(session, telegram_id=11)
+        correspondent = await Correspondent.create(session, owner_id=user.id, name="X")
+        mail = await MailItem.create(
+            session,
+            owner_id=user.id,
+            correspondent_id=correspondent.id,
+            direction=MailDirection.OUTGOING,
+            sent_at=date(2026, 7, 15),
+        )
+        await session.commit()
+        correspondent_id, mail_id = correspondent.id, mail.id
+
+    async with database.session_factory() as session:
+        await session.execute(text("DELETE FROM correspondents WHERE id = :id"), {"id": correspondent_id})
+        await session.commit()
+
+    async with database.session_factory() as session:
+        mail_correspondent_id = (
+            await session.execute(text("SELECT correspondent_id FROM mail_items WHERE id = :id"), {"id": mail_id})
+        ).scalar_one()
+        mail_items = (await session.execute(text("SELECT count(*) FROM mail_items"))).scalar()
+
+    assert mail_correspondent_id is None
+    assert mail_items == 1
+
+
+async def test_on_delete_cascade_removes_user_children(database: Database) -> None:
     async with database.session_factory() as session:
         user = await _make_user(session, telegram_id=20)
         correspondent = await Correspondent.create(session, owner_id=user.id, name="X")
