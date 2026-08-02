@@ -767,8 +767,8 @@ async def test_empty_journal_has_create_cta(tmp_path) -> None:
     async with app_client(build_settings(tmp_path)) as client:
         await _login(client, telegram_id=96)
         response = await client.get("/")
-    assert "Журнал пока пуст" in response.text
-    assert 'href="/mail/new"' in response.text
+    assert "Журнал пока пуст." in response.text
+    assert response.text.count('href="/mail/new"') == 1
 
 
 # --- Flash messages -----------------------------------------------------
