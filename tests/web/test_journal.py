@@ -165,8 +165,10 @@ async def test_journal_empty_state(tmp_path) -> None:
         await _login(client, telegram_id=20, first_name="Empty")
         response = await client.get("/")
     assert response.status_code == 200
-    assert "Журнал пока пуст" in response.text
+    assert "Журнал пока пуст." in response.text
+    assert "Добавьте первое отправленное или полученное письмо, чтобы начать журнал." in response.text
     assert "Добавить письмо" in response.text
+    assert response.text.count('href="/mail/new"') == 1
 
 
 async def test_journal_invalid_filter_defaults_to_all(tmp_path) -> None:

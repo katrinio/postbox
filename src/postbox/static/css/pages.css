@@ -794,6 +794,11 @@
   padding: var(--space-7) var(--space-4);
 }
 
+.empty-state--journal {
+  padding-top: var(--space-5);
+  padding-bottom: var(--space-8);
+}
+
 .empty-state__icon {
   color: var(--color-ink-muted);
   opacity: 0.5;
