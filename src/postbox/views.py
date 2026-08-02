@@ -716,7 +716,7 @@ async def edit_note_form(
             "item": item,
             "csrf_token": csrf,
             "errors": {},
-            "correspondent_value": item.correspondent.name,
+            "correspondent_value": item.correspondent.name if item.correspondent else "",
             "note_value": item.note or "",
             "geography_values": _geography_values_from_item(item),
             "correspondents": correspondents,
@@ -796,7 +796,7 @@ async def update_note(
         _set_csrf_cookie(response, csrf, settings)
         return response
 
-    if correspondent_name != item.correspondent.name:
+    if item.correspondent is None or correspondent_name != item.correspondent.name:
         corr = await Correspondent.find_or_create(session, owner_id=user_id, name=correspondent_name)
         item.correspondent_id = corr.id
 
@@ -846,6 +846,8 @@ async def correspondents_index(
 
     summaries = await Correspondent.summaries_for_owner(session, user_id)
     csrf = _csrf_token(request)
+    raw_flash = request.cookies.get(FLASH_COOKIE)
+    flash = unquote(raw_flash) if raw_flash else None
     response = _render(
         request,
         "correspondents.html",
@@ -853,8 +855,11 @@ async def correspondents_index(
             "user": user,
             "summaries": summaries,
             "csrf_token": csrf,
+            "flash": flash,
         },
     )
+    if raw_flash:
+        response.delete_cookie(FLASH_COOKIE, path="/")
     _set_csrf_cookie(response, csrf, settings)
     return response
 
@@ -972,6 +977,28 @@ async def correspondent_save_note(
 
     redirect = RedirectResponse(f"/correspondent/{correspondent_id}", status_code=303)
     _set_flash(redirect, "Заметка обновлена.")
+    return redirect
+
+
+@router.post("/correspondent/{correspondent_id}/delete")
+async def correspondent_delete(
+    request: Request,
+    correspondent_id: int,
+    user_id: Annotated[int, Depends(current_user_id)],
+    session: Annotated[AsyncSession, Depends(web_session)],
+    csrf_token: Annotated[str, Form()] = "",
+) -> Response:
+    _verify_csrf(request, csrf_token)
+    user = await User.get(session, user_id)
+    if user is None:
+        raise NotAuthenticated
+
+    correspondent = await _load_correspondent(session, user_id, correspondent_id)
+    await correspondent.delete(session)
+    await session.commit()
+
+    redirect = RedirectResponse("/correspondents", status_code=303)
+    _set_flash(redirect, "Contact deleted.")
     return redirect
 
 

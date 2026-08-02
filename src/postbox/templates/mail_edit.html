@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Редактировать — {{ item.correspondent.name }} — Postbox{% endblock %}
+{% block title %}Редактировать — {% if item.correspondent %}{{ item.correspondent.name }}{% else %}Deleted contact{% endif %} — Postbox{% endblock %}
 
 {% block content %}
 <section class="form-screen">

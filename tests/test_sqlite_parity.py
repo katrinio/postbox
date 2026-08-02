@@ -170,7 +170,37 @@ async def test_mail_cannot_use_another_users_correspondent(database: Database) -
             )
 
 
-async def test_on_delete_cascade_removes_children(database: Database) -> None:
+async def test_deleting_correspondent_sets_mail_correspondent_null(database: Database) -> None:
+    async with database.session_factory() as session:
+        user = await _make_user(session, telegram_id=11)
+        correspondent = await Correspondent.create(session, owner_id=user.id, name="X")
+        mail = await MailItem.create(
+            session,
+            owner_id=user.id,
+            correspondent_id=correspondent.id,
+            direction=MailDirection.OUTGOING,
+            sent_at=date(2026, 7, 15),
+        )
+        await session.commit()
+        correspondent_id, mail_id = correspondent.id, mail.id
+
+    async with database.session_factory() as session:
+        correspondent = await Correspondent.get(session, correspondent_id)
+        assert correspondent is not None
+        await correspondent.delete(session)
+        await session.commit()
+
+    async with database.session_factory() as session:
+        mail_correspondent_id = (
+            await session.execute(text("SELECT correspondent_id FROM mail_items WHERE id = :id"), {"id": mail_id})
+        ).scalar_one()
+        mail_items = (await session.execute(text("SELECT count(*) FROM mail_items"))).scalar()
+
+    assert mail_correspondent_id is None
+    assert mail_items == 1
+
+
+async def test_on_delete_cascade_removes_user_children(database: Database) -> None:
     async with database.session_factory() as session:
         user = await _make_user(session, telegram_id=20)
         correspondent = await Correspondent.create(session, owner_id=user.id, name="X")

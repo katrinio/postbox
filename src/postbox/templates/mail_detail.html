@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ item.correspondent.name }} — Postbox{% endblock %}
+{% block title %}{% if item.correspondent %}{{ item.correspondent.name }}{% else %}Deleted contact{% endif %} — Postbox{% endblock %}
 
 {% block content %}
 <section class="detail-screen">
@@ -18,7 +18,11 @@
       </span>
       <div>
         <h1 class="detail-name">
+          {% if item.correspondent %}
           <a class="detail-name__link" href="/correspondent/{{ item.correspondent.id }}">{{ item.correspondent.name }}</a>
+          {% else %}
+          <span class="detail-name__removed">Deleted contact</span>
+          {% endif %}
         </h1>
         <p class="detail-direction">{% if item.direction.value == "incoming" %}Входящее письмо{% else %}Исходящее письмо{% endif %}</p>
       </div>

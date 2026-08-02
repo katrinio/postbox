@@ -5,9 +5,10 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import httpx
+from sqlalchemy import select
 
 from postbox.api import create_app
-from postbox.models import Correspondent
+from postbox.models import Correspondent, MailItem
 
 from .conftest import (
     _current_user_id,
@@ -427,6 +428,201 @@ async def test_correspondent_save_note_other_user_returns_404(tmp_path) -> None:
         corr = await Correspondent.find_for_owner(session, owner_id=owner_id, correspondent_id=correspondent_id)
     assert corr is not None
     assert corr.note is None
+
+
+# --- Delete correspondent ----------------------------------------------------
+
+
+async def test_delete_correspondent_keeps_mail_and_allows_reassign(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=187)
+            user_id = _current_user_id(client)
+            await _seed_mail(
+                app,
+                user_id,
+                [{"correspondent": "Remove Me", "direction": "outgoing", "sent_at": today, "note": "Keep me"}],
+            )
+            await client.get("/")
+            csrf = client.cookies.get("postbox_csrf")
+
+            async with app.state.database.session_factory() as session:
+                correspondent = await Correspondent.find_or_create(session, owner_id=user_id, name="Remove Me")
+                correspondent_id = correspondent.id
+                mail_id = (
+                    await session.execute(
+                        select(MailItem.id).where(
+                            MailItem.owner_id == user_id,
+                            MailItem.correspondent_id == correspondent_id,
+                        )
+                    )
+                ).scalar_one()
+
+            response = await client.post(f"/correspondent/{correspondent_id}/delete", data={"csrf_token": csrf})
+            client.cookies.update(response.cookies)
+            journal = await client.get("/")
+            detail = await client.get(f"/mail/{mail_id}")
+            edit = await client.get(f"/mail/{mail_id}/edit")
+
+            async with app.state.database.session_factory() as session:
+                removed_contacts = (
+                    (
+                        await session.execute(
+                            select(Correspondent).where(
+                                Correspondent.owner_id == user_id,
+                                Correspondent.name == "Remove Me",
+                            )
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                unassigned_mail = await MailItem.get(session, mail_id)
+
+            update = await client.post(
+                f"/mail/{mail_id}/note",
+                data={"csrf_token": csrf, "correspondent": "New Contact", "note": "Keep me"},
+                follow_redirects=False,
+            )
+
+            async with app.state.database.session_factory() as session:
+                mail = await MailItem.get(session, mail_id)
+                new_contact = await Correspondent.find_or_create(session, owner_id=user_id, name="New Contact")
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/correspondents"
+    assert "Contact deleted." in journal.text
+    assert removed_contacts == []
+    assert unassigned_mail is not None
+    assert unassigned_mail.correspondent_id is None
+    assert mail is not None
+    assert mail.correspondent_id == new_contact.id
+    assert "Deleted contact" in journal.text
+    assert "Deleted contact" in detail.text
+    assert "Keep me" in detail.text
+    assert edit.status_code == 200
+    assert update.status_code == 303
+
+
+async def test_delete_correspondent_dialog_is_on_detail_page(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=188)
+            user_id = _current_user_id(client)
+            await _seed_mail(app, user_id, [{"correspondent": "Dialog", "direction": "outgoing", "sent_at": today}])
+            async with app.state.database.session_factory() as session:
+                correspondent = await Correspondent.find_or_create(session, owner_id=user_id, name="Dialog")
+                correspondent_id = correspondent.id
+
+            detail = await client.get(f"/correspondent/{correspondent_id}")
+
+    assert "Delete contact?" in detail.text
+    assert "This contact will be removed from your address book." in detail.text
+    assert "Existing letters will remain in your journal." in detail.text
+    assert f'action="/correspondent/{correspondent_id}/delete"' in detail.text
+    assert "data-delete-contact-cancel" in detail.text
+    assert "cancel.focus()" in detail.text
+
+
+async def test_delete_correspondent_other_user_returns_404_and_keeps_contact(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=189)
+            owner_id = _current_user_id(client)
+            await _seed_mail(
+                app,
+                owner_id,
+                [{"correspondent": "Private Delete", "direction": "outgoing", "sent_at": today}],
+            )
+            async with app.state.database.session_factory() as session:
+                correspondent = await Correspondent.find_or_create(session, owner_id=owner_id, name="Private Delete")
+                correspondent_id = correspondent.id
+
+            await _login(client, telegram_id=190)
+            await client.get("/")
+            csrf = client.cookies.get("postbox_csrf")
+            response = await client.post(f"/correspondent/{correspondent_id}/delete", data={"csrf_token": csrf})
+
+            async with app.state.database.session_factory() as session:
+                still_present = await Correspondent.find_for_owner(
+                    session,
+                    owner_id=owner_id,
+                    correspondent_id=correspondent_id,
+                )
+
+    assert response.status_code == 404
+    assert still_present is not None
+
+
+async def test_delete_correspondent_requires_csrf(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=191)
+            user_id = _current_user_id(client)
+            await _seed_mail(
+                app,
+                user_id,
+                [{"correspondent": "CSRF Delete", "direction": "outgoing", "sent_at": today}],
+            )
+            async with app.state.database.session_factory() as session:
+                correspondent = await Correspondent.find_or_create(session, owner_id=user_id, name="CSRF Delete")
+                correspondent_id = correspondent.id
+
+            response = await client.post(f"/correspondent/{correspondent_id}/delete", data={"csrf_token": "wrong"})
+
+            async with app.state.database.session_factory() as session:
+                still_present = await Correspondent.find_for_owner(
+                    session,
+                    owner_id=user_id,
+                    correspondent_id=correspondent_id,
+                )
+
+    assert response.status_code == 303
+    assert "error=csrf" in response.headers["location"]
+    assert still_present is not None
+
+
+async def test_get_delete_correspondent_does_not_delete(tmp_path) -> None:
+    today = date.today()
+    settings = build_settings(tmp_path)
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+            await _login(client, telegram_id=192)
+            user_id = _current_user_id(client)
+            await _seed_mail(app, user_id, [{"correspondent": "GET Delete", "direction": "outgoing", "sent_at": today}])
+            async with app.state.database.session_factory() as session:
+                correspondent = await Correspondent.find_or_create(session, owner_id=user_id, name="GET Delete")
+                correspondent_id = correspondent.id
+
+            response = await client.get(f"/correspondent/{correspondent_id}/delete")
+
+            async with app.state.database.session_factory() as session:
+                still_present = await Correspondent.find_for_owner(
+                    session,
+                    owner_id=user_id,
+                    correspondent_id=correspondent_id,
+                )
+
+    assert response.status_code == 405
+    assert still_present is not None
 
 
 # --- Cache-Control Headers ---------------------------------------------------

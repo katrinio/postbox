@@ -12,7 +12,11 @@
 
     <span class="journal-row__body">
       {% if show_name %}
+      {% if item.correspondent %}
       <span class="journal-row__name">{{ item.correspondent.name }}</span>
+      {% else %}
+      <span class="journal-row__name journal-row__name--removed">Deleted contact</span>
+      {% endif %}
       {% endif %}
       <span class="journal-row__route">
         {% if route %}{{ route }}{% else %}<span class="journal-row__route-empty">Маршрут не указан</span>{% endif %}

@@ -106,7 +106,6 @@ class MailItem(ActiveRecord):
             ["correspondent_id", "owner_id"],
             ["correspondents.id", "correspondents.owner_id"],
             name="fk_mail_items_correspondent_owner",
-            ondelete="CASCADE",
         ),
         CheckConstraint(
             "received_at IS NULL OR received_at >= sent_at",
@@ -124,7 +123,7 @@ class MailItem(ActiveRecord):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    correspondent_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    correspondent_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     direction: Mapped[MailDirection] = mapped_column(
         Enum(
             MailDirection,
@@ -145,7 +144,7 @@ class MailItem(ActiveRecord):
         back_populates="mail_items",
         overlaps="correspondent,mail_items",
     )
-    correspondent: Mapped[Correspondent] = relationship(
+    correspondent: Mapped[Correspondent | None] = relationship(
         back_populates="mail_items",
         overlaps="owner,mail_items",
     )
