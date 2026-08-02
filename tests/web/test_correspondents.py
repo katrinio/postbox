@@ -94,7 +94,7 @@ async def test_correspondents_empty_state(tmp_path) -> None:
     assert response.status_code == 200
     assert "Адресная пока пуста" in response.text
     assert "Адресаты появятся здесь после добавления письма." in response.text
-    assert 'class="empty-state empty-state--address-book"' in response.text
+    assert 'class="empty-state"' in response.text
     assert 'class="empty-state__icon"' in response.text
     assert "Добавить адресата" not in response.text
     assert 'href="/correspondent/new"' not in response.text
