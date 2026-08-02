@@ -21,18 +21,17 @@ def upgrade() -> None:
         batch_op.drop_constraint("fk_mail_items_correspondent_owner", type_="foreignkey")
         batch_op.alter_column("correspondent_id", existing_type=sa.Integer(), nullable=True)
         batch_op.create_foreign_key(
-            "fk_mail_items_correspondent",
+            "fk_mail_items_correspondent_owner",
             "correspondents",
-            ["correspondent_id"],
-            ["id"],
-            ondelete="SET NULL",
+            ["correspondent_id", "owner_id"],
+            ["id", "owner_id"],
         )
 
 
 def downgrade() -> None:
     op.execute("DELETE FROM mail_items WHERE correspondent_id IS NULL")
     with op.batch_alter_table("mail_items") as batch_op:
-        batch_op.drop_constraint("fk_mail_items_correspondent", type_="foreignkey")
+        batch_op.drop_constraint("fk_mail_items_correspondent_owner", type_="foreignkey")
         batch_op.alter_column("correspondent_id", existing_type=sa.Integer(), nullable=False)
         batch_op.create_foreign_key(
             "fk_mail_items_correspondent_owner",

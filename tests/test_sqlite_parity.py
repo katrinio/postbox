@@ -150,18 +150,20 @@ async def test_row_referencing_missing_user_is_rejected(database: Database) -> N
             await Correspondent.create(session, owner_id=999, name="Ghost owner")
 
 
-async def test_mail_referencing_missing_correspondent_is_rejected(database: Database) -> None:
+async def test_mail_cannot_use_another_users_correspondent(database: Database) -> None:
     async with database.session_factory() as session:
-        user = await _make_user(session, telegram_id=10)
+        first = await _make_user(session, telegram_id=10, name="First")
+        second = await _make_user(session, telegram_id=11, name="Second")
+        correspondent = await Correspondent.create(session, owner_id=first.id, name="Private")
         await session.commit()
-        user_id = user.id
+        second_id, correspondent_id = second.id, correspondent.id
 
     async with database.session_factory() as session:
         with pytest.raises(IntegrityError):
             await MailItem.create(
                 session,
-                owner_id=user_id,
-                correspondent_id=999,
+                owner_id=second_id,
+                correspondent_id=correspondent_id,
                 direction=MailDirection.INCOMING,
                 sent_at=None,
                 received_at=date(2026, 7, 20),
@@ -183,7 +185,9 @@ async def test_deleting_correspondent_sets_mail_correspondent_null(database: Dat
         correspondent_id, mail_id = correspondent.id, mail.id
 
     async with database.session_factory() as session:
-        await session.execute(text("DELETE FROM correspondents WHERE id = :id"), {"id": correspondent_id})
+        correspondent = await Correspondent.get(session, correspondent_id)
+        assert correspondent is not None
+        await correspondent.delete(session)
         await session.commit()
 
     async with database.session_factory() as session:

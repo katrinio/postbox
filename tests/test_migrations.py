@@ -85,7 +85,7 @@ def test_mail_geography_migration_preserves_existing_sqlite_rows(tmp_path) -> No
     assert "destination_city" not in columns
 
 
-def test_correspondent_delete_migration_sets_mail_reference_null(tmp_path) -> None:
+def test_correspondent_delete_migration_makes_mail_reference_nullable_without_cascade(tmp_path) -> None:
     database_path = tmp_path / "contact-delete.db"
     database_url = f"sqlite+aiosqlite:///{database_path}"
 
@@ -128,9 +128,9 @@ def test_correspondent_delete_migration_sets_mail_reference_null(tmp_path) -> No
         nullable = connection.execute("PRAGMA table_info(mail_items)").fetchall()[1][3]
         foreign_keys = connection.execute("PRAGMA foreign_key_list(mail_items)").fetchall()
         connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("DELETE FROM correspondents WHERE id = 1")
+        connection.execute("UPDATE mail_items SET correspondent_id = NULL WHERE id = 1")
         row = connection.execute("SELECT correspondent_id FROM mail_items WHERE id = 1").fetchone()
 
     assert nullable == 0
-    assert any(fk[2] == "correspondents" and fk[6].upper() == "SET NULL" for fk in foreign_keys)
+    assert any(fk[2] == "correspondents" and fk[6].upper() != "CASCADE" for fk in foreign_keys)
     assert row == (None,)

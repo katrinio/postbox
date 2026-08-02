@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint, func, select
+from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -123,3 +123,13 @@ class Correspondent(ActiveRecord):
             if c.name.casefold() == name_lower:
                 return c
         return await cls.create(session, owner_id=owner_id, name=name)
+
+    async def delete(self, session: AsyncSession) -> None:
+        from postbox.models.mail_item import MailItem
+
+        await session.execute(
+            update(MailItem)
+            .where(MailItem.owner_id == self.owner_id, MailItem.correspondent_id == self.id)
+            .values(correspondent_id=None)
+        )
+        await super().delete(session)

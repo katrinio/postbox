@@ -6,7 +6,21 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Self
 
 import pycountry
-from sqlalchemy import CheckConstraint, Date, Enum, ForeignKey, Index, Integer, String, Text, case, func, or_, select
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    Enum,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    Integer,
+    String,
+    Text,
+    case,
+    func,
+    or_,
+    select,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
 
@@ -88,6 +102,11 @@ class MailItem(ActiveRecord):
 
     __tablename__ = "mail_items"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["correspondent_id", "owner_id"],
+            ["correspondents.id", "correspondents.owner_id"],
+            name="fk_mail_items_correspondent_owner",
+        ),
         CheckConstraint(
             "received_at IS NULL OR received_at >= sent_at",
             name="ck_mail_items_received_after_sent",
@@ -104,11 +123,7 @@ class MailItem(ActiveRecord):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    correspondent_id: Mapped[int | None] = mapped_column(
-        Integer,
-        ForeignKey("correspondents.id", name="fk_mail_items_correspondent", ondelete="SET NULL"),
-        nullable=True,
-    )
+    correspondent_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     direction: Mapped[MailDirection] = mapped_column(
         Enum(
             MailDirection,
